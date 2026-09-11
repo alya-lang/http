@@ -1,0 +1,13 @@
+[package]
+name = "http"
+version = "0.1.0"
+alya-version = "0.0.6"
+entry = "src/lib.alya"
+description = "Production-ready HTTP client, server, router, and middleware toolkit for Alya"
+authors = ["Alya Language Contributors <https://github.com/alya-lang>"]
+license = "MIT"
+homepage = "https://github.com/alya-lang/alya"
+repository = "https://github.com/alya-lang/http"
+keywords = ["alya", "alya-lang", "package", "http", "https", "server", "client", "router", "middleware", "networking", "rest-api"]
+
+[dependencies]
