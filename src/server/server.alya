@@ -149,7 +149,8 @@ function server_process(server, ctx)
     # Route matching
     let m = router_match(server.router, ctx.req.method, ctx.req.path)
     if m.found == 1
-        ctx.req.params = m.params
+        let req = ctx.req
+        req.params = m.params
     elif m.status == 405
         let res = ctx.res
         res.status_code = 405

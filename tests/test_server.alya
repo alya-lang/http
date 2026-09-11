@@ -37,7 +37,7 @@ function main()
     let a1 = m1.action
     runner_assert_str_eq(r, a1, "get_user", "server_process match action")
     let p1 = ctx1.req.params
-    let id1 = p1["id"]
+    let id1 = str_from_ptr(p1["id"])
     runner_assert_str_eq(r, id1, "99", "server_process params injected")
 
     # 4. Request processing - Method Not Allowed (405)

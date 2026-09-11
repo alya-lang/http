@@ -52,10 +52,10 @@ function header_get(headers, key, default_val = "")
     if has(headers, k)
         return headers[k]
     end
-    let keys = headers.keys()
+    let ks = keys(headers)
     let i = 0
-    while i < len(keys)
-        let cur = keys[i]
+    while i < len(ks)
+        let cur = ks[i]
         if lower(trim(cur)) == k
             return headers[cur]
         end
@@ -83,10 +83,10 @@ function header_has(headers, key)
     if has(headers, k)
         return 1
     end
-    let keys = headers.keys()
+    let ks = keys(headers)
     let i = 0
-    while i < len(keys)
-        let cur = keys[i]
+    while i < len(ks)
+        let cur = ks[i]
         if lower(trim(cur)) == k
             return 1
         end
@@ -102,10 +102,10 @@ function header_remove(headers, key)
     end
     let target = lower(trim(key))
     let out = {}
-    let keys = headers.keys()
+    let ks = keys(headers)
     let i = 0
-    while i < len(keys)
-        let k = keys[i]
+    while i < len(ks)
+        let k = ks[i]
         if lower(trim(k)) != target
             out[k] = headers[k]
         end
@@ -120,10 +120,10 @@ function headers_format(headers)
         return ""
     end
     let out = ""
-    let keys = headers.keys()
+    let ks = keys(headers)
     let i = 0
-    while i < len(keys)
-        let k = keys[i]
+    while i < len(ks)
+        let k = ks[i]
         let val = headers[k]
         if val != null
             out = out + header_canonical(k) + ": " + str(val) + "\r\n"
