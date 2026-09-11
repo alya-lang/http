@@ -72,13 +72,13 @@ Add `http` to your project's `alya.toml`:
 
 ```toml
 [dependencies]
-http = { git = "https://github.com/alya-lang/http", tag = "v0.1.0" }
+http = { git = "https://github.com/alya-lang/http", branch = "main" }
 ```
 
 Or install it directly via the `alyac` CLI:
 
 ```bash
-alyac add http --git https://github.com/alya-lang/http --tag v0.1.0
+alyac add http --git https://github.com/alya-lang/http --branch main
 alyac install
 ```
 
