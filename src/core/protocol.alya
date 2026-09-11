@@ -1,0 +1,296 @@
+# HTTP/1.1 Wire Protocol Parser and Serializer
+# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "../types.alya"
+import "./status.alya"
+import "./headers.alya"
+import "./cookies.alya"
+import "url" as url_pkg
+
+# Internal helper to find substring index
+function _proto_find(s, target, start_idx = 0)
+    let slen = len(s)
+    let tlen = len(target)
+    if tlen == 0
+        return start_idx
+    end
+    let i = start_idx
+    while i + tlen <= slen
+        if substring(s, i, tlen) == target
+            return i
+        end
+        i += 1
+    end
+    return -1
+end
+
+# Parses a raw HTTP/1.1 request wire string into an HttpRequest struct
+function http_parse_request(raw, remote_addr = "")
+    if raw == null or len(raw) == 0
+        return request_create("GET", "/", "", {}, "", remote_addr)
+    end
+
+    # Find header and body boundary (\r\n\r\n or \n\n)
+    let body_idx = _proto_find(raw, "\r\n\r\n", 0)
+    let header_part = ""
+    let body_part = ""
+    if body_idx >= 0
+        header_part = substring(raw, 0, body_idx)
+        let b_start = body_idx + 4
+        if b_start < len(raw)
+            body_part = substring(raw, b_start, len(raw) - b_start)
+        end
+    else
+        let alt_idx = _proto_find(raw, "\n\n", 0)
+        if alt_idx >= 0
+            header_part = substring(raw, 0, alt_idx)
+            let b_start = alt_idx + 2
+            if b_start < len(raw)
+                body_part = substring(raw, b_start, len(raw) - b_start)
+            end
+        else
+            header_part = raw
+        end
+    end
+
+    let lines = split(header_part, "\n")
+    let method = "GET"
+    let full_url = "/"
+    let path = "/"
+    let query = ""
+    let query_params = {}
+    let headers = {}
+
+    if len(lines) > 0
+        let req_line = trim(lines[0])
+        let parts = split(req_line, " ")
+        if len(parts) >= 1
+            method = upper(trim(parts[0]))
+        end
+        if len(parts) >= 2
+            full_url = trim(parts[1])
+            let q_idx = _proto_find(full_url, "?", 0)
+            if q_idx >= 0
+                path = substring(full_url, 0, q_idx)
+                query = substring(full_url, q_idx + 1, len(full_url) - (q_idx + 1))
+                query_params = url_pkg::url_parse_query(query)
+            else
+                path = full_url
+                query = ""
+                query_params = {}
+            end
+        end
+
+        # Parse request headers
+        let li = 1
+        while li < len(lines)
+            let hline = trim(lines[li])
+            let c_idx = _proto_find(hline, ":", 0)
+            if c_idx > 0
+                let hkey = lower(trim(substring(hline, 0, c_idx)))
+                let hval = trim(substring(hline, c_idx + 1, len(hline) - (c_idx + 1)))
+                headers[hkey] = hval
+            end
+            li += 1
+        end
+    end
+
+    # Parse cookies if Cookie header is provided
+    let cookies = {}
+    if has(headers, "cookie")
+        cookies = cookie_parse(headers["cookie"])
+    end
+
+    return HttpRequest {
+        method: method,
+        url: full_url,
+        path: path,
+        query: query,
+        query_params: query_params,
+        headers: headers,
+        body: body_part,
+        params: {},
+        cookies: cookies,
+        remote_addr: remote_addr
+    }
+end
+
+# Parses a raw HTTP/1.1 response wire string into an HttpResponse struct
+function http_parse_response(raw)
+    if raw == null or len(raw) == 0
+        return HttpResponse(-1, "Empty response", {}, "", [])
+    end
+
+    # Find header and body boundary (\r\n\r\n or \n\n)
+    let body_idx = _proto_find(raw, "\r\n\r\n", 0)
+    let header_part = ""
+    let body_part = ""
+    if body_idx >= 0
+        header_part = substring(raw, 0, body_idx)
+        let b_start = body_idx + 4
+        if b_start < len(raw)
+            body_part = substring(raw, b_start, len(raw) - b_start)
+        end
+    else
+        let alt_idx = _proto_find(raw, "\n\n", 0)
+        if alt_idx >= 0
+            header_part = substring(raw, 0, alt_idx)
+            let b_start = alt_idx + 2
+            if b_start < len(raw)
+                body_part = substring(raw, b_start, len(raw) - b_start)
+            end
+        else
+            header_part = raw
+        end
+    end
+
+    let lines = split(header_part, "\n")
+    let status_code = 0
+    let status_text = ""
+    let headers = {}
+    let cookies = []
+
+    if len(lines) > 0
+        let status_line = trim(lines[0])
+        let parts = split(status_line, " ")
+        if len(parts) >= 2
+            status_code = to_int(parts[1])
+        end
+        if len(parts) >= 3
+            status_text = parts[2]
+            let pi = 3
+            while pi < len(parts)
+                status_text = status_text + " " + parts[pi]
+                pi += 1
+            end
+        else
+            status_text = http_status_text(status_code)
+        end
+
+        # Parse header lines
+        let li = 1
+        while li < len(lines)
+            let hline = trim(lines[li])
+            let c_idx = _proto_find(hline, ":", 0)
+            if c_idx > 0
+                let hkey = lower(trim(substring(hline, 0, c_idx)))
+                let hval = trim(substring(hline, c_idx + 1, len(hline) - (c_idx + 1)))
+                headers[hkey] = hval
+                if hkey == "set-cookie"
+                    push(cookies, hval)
+                end
+            end
+            li += 1
+        end
+    end
+
+    return HttpResponse {
+        status_code: status_code,
+        status_text: status_text,
+        headers: headers,
+        body: body_part,
+        cookies: cookies
+    }
+end
+
+# Serializes an HttpResponse struct to HTTP/1.1 wire string format
+function http_format_response(res)
+    if res == null
+        return "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n"
+    end
+
+    let status_text = res.status_text
+    if status_text == null or status_text == ""
+        status_text = http_status_text(res.status_code)
+    end
+
+    let wire = "HTTP/1.1 " + str(res.status_code) + " " + status_text + "\r\n"
+
+    # Ensure Content-Length and Content-Type defaults
+    let headers = res.headers
+    if headers == null
+        headers = {}
+    end
+
+    if !has(headers, "content-length")
+        let blen = 0
+        if res.body != null
+            blen = len(res.body)
+        end
+        headers["content-length"] = str(blen)
+    end
+
+    if !has(headers, "content-type") and res.body != null and len(res.body) > 0
+        headers["content-type"] = "text/plain; charset=utf-8"
+    end
+
+    if !has(headers, "connection")
+        headers["connection"] = "close"
+    end
+
+    # Format general headers
+    wire = wire + headers_format(headers)
+
+    # Format cookies as Set-Cookie headers
+    if res.cookies != null
+        let ci = 0
+        while ci < len(res.cookies)
+            let c = res.cookies[ci]
+            wire = wire + "Set-Cookie: " + cookie_format(c) + "\r\n"
+            ci += 1
+        end
+    end
+
+    # Header-Body delimiter
+    wire = wire + "\r\n"
+
+    # Append body
+    if res.body != null and len(res.body) > 0
+        wire = wire + res.body
+    end
+
+    return wire
+end
+
+# Serializes an HttpRequest struct to HTTP/1.1 wire string format
+function http_format_request(req)
+    if req == null
+        return "GET / HTTP/1.1\r\n\r\n"
+    end
+
+    let target = req.path
+    if req.query != null and req.query != ""
+        target = target + "?" + req.query
+    end
+    if target == ""
+        target = "/"
+    end
+
+    let wire = req.method + " " + target + " HTTP/1.1\r\n"
+
+    let headers = req.headers
+    if headers == null
+        headers = {}
+    end
+
+    if !has(headers, "user-agent")
+        headers["user-agent"] = "Alya-Http/0.1.0"
+    end
+
+    if !has(headers, "connection")
+        headers["connection"] = "close"
+    end
+
+    if req.body != null and len(req.body) > 0 and !has(headers, "content-length")
+        headers["content-length"] = str(len(req.body))
+    end
+
+    wire = wire + headers_format(headers)
+    wire = wire + "\r\n"
+
+    if req.body != null and len(req.body) > 0
+        wire = wire + req.body
+    end
+
+    return wire
+end

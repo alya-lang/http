@@ -1,0 +1,160 @@
+# HTTP Status Codes & Status Introspection
+# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+# 1xx Informational
+let STATUS_CONTINUE = 100
+let STATUS_SWITCHING_PROTOCOLS = 101
+
+# 2xx Success
+let STATUS_OK = 200
+let STATUS_CREATED = 201
+let STATUS_ACCEPTED = 202
+let STATUS_NON_AUTHORITATIVE_INFO = 203
+let STATUS_NO_CONTENT = 204
+let STATUS_RESET_CONTENT = 205
+let STATUS_PARTIAL_CONTENT = 206
+
+# 3xx Redirection
+let STATUS_MULTIPLE_CHOICES = 300
+let STATUS_MOVED_PERMANENTLY = 301
+let STATUS_FOUND = 302
+let STATUS_SEE_OTHER = 303
+let STATUS_NOT_MODIFIED = 304
+let STATUS_USE_PROXY = 305
+let STATUS_TEMPORARY_REDIRECT = 307
+let STATUS_PERMANENT_REDIRECT = 308
+
+# 4xx Client Error
+let STATUS_BAD_REQUEST = 400
+let STATUS_UNAUTHORIZED = 401
+let STATUS_PAYMENT_REQUIRED = 402
+let STATUS_FORBIDDEN = 403
+let STATUS_NOT_FOUND = 404
+let STATUS_METHOD_NOT_ALLOWED = 405
+let STATUS_NOT_ACCEPTABLE = 406
+let STATUS_PROXY_AUTH_REQUIRED = 407
+let STATUS_REQUEST_TIMEOUT = 408
+let STATUS_CONFLICT = 409
+let STATUS_GONE = 410
+let STATUS_LENGTH_REQUIRED = 411
+let STATUS_PRECONDITION_FAILED = 412
+let STATUS_PAYLOAD_TOO_LARGE = 413
+let STATUS_URI_TOO_LONG = 414
+let STATUS_UNSUPPORTED_MEDIA_TYPE = 415
+let STATUS_RANGE_NOT_SATISFIABLE = 416
+let STATUS_EXPECTATION_FAILED = 417
+let STATUS_IM_A_TEAPOT = 418
+let STATUS_UNPROCESSABLE_ENTITY = 422
+let STATUS_TOO_MANY_REQUESTS = 429
+
+# 5xx Server Error
+let STATUS_INTERNAL_SERVER_ERROR = 500
+let STATUS_NOT_IMPLEMENTED = 501
+let STATUS_BAD_GATEWAY = 502
+let STATUS_SERVICE_UNAVAILABLE = 503
+let STATUS_GATEWAY_TIMEOUT = 504
+let STATUS_HTTP_VERSION_NOT_SUPPORTED = 505
+
+# Status getter functions for namespaced module imports
+function status_ok() return 200 end
+function status_created() return 201 end
+function status_accepted() return 202 end
+function status_no_content() return 204 end
+function status_moved_permanently() return 301 end
+function status_found() return 302 end
+function status_not_modified() return 304 end
+function status_temporary_redirect() return 307 end
+function status_permanent_redirect() return 308 end
+function status_bad_request() return 400 end
+function status_unauthorized() return 401 end
+function status_forbidden() return 403 end
+function status_not_found() return 404 end
+function status_method_not_allowed() return 405 end
+function status_conflict() return 409 end
+function status_too_many_requests() return 429 end
+function status_internal_server_error() return 500 end
+function status_not_implemented() return 501 end
+function status_bad_gateway() return 502 end
+function status_service_unavailable() return 503 end
+function status_gateway_timeout() return 504 end
+
+# Returns standard HTTP status text for a given status code
+function http_status_text(code)
+    when code
+        is 100 then return "Continue"
+        is 101 then return "Switching Protocols"
+        is 200 then return "OK"
+        is 201 then return "Created"
+        is 202 then return "Accepted"
+        is 203 then return "Non-Authoritative Information"
+        is 204 then return "No Content"
+        is 205 then return "Reset Content"
+        is 206 then return "Partial Content"
+        is 300 then return "Multiple Choices"
+        is 301 then return "Moved Permanently"
+        is 302 then return "Found"
+        is 303 then return "See Other"
+        is 304 then return "Not Modified"
+        is 305 then return "Use Proxy"
+        is 307 then return "Temporary Redirect"
+        is 308 then return "Permanent Redirect"
+        is 400 then return "Bad Request"
+        is 401 then return "Unauthorized"
+        is 402 then return "Payment Required"
+        is 403 then return "Forbidden"
+        is 404 then return "Not Found"
+        is 405 then return "Method Not Allowed"
+        is 406 then return "Not Acceptable"
+        is 407 then return "Proxy Authentication Required"
+        is 408 then return "Request Timeout"
+        is 409 then return "Conflict"
+        is 410 then return "Gone"
+        is 411 then return "Length Required"
+        is 412 then return "Precondition Failed"
+        is 413 then return "Payload Too Large"
+        is 414 then return "URI Too Long"
+        is 415 then return "Unsupported Media Type"
+        is 416 then return "Range Not Satisfiable"
+        is 417 then return "Expectation Failed"
+        is 418 then return "I'm a teapot"
+        is 422 then return "Unprocessable Entity"
+        is 429 then return "Too Many Requests"
+        is 500 then return "Internal Server Error"
+        is 501 then return "Not Implemented"
+        is 502 then return "Bad Gateway"
+        is 503 then return "Service Unavailable"
+        is 504 then return "Gateway Timeout"
+        is 505 then return "HTTP Version Not Supported"
+        else return "Unknown Status"
+    end
+end
+
+# Checks if status code is informational (1xx)
+function http_is_informational(code)
+    return code >= 100 and code < 200
+end
+
+# Checks if status code is successful (2xx)
+function http_is_success(code)
+    return code >= 200 and code < 300
+end
+
+# Checks if status code is redirection (3xx)
+function http_is_redirect(code)
+    return code >= 300 and code < 400
+end
+
+# Checks if status code is client error (4xx)
+function http_is_client_error(code)
+    return code >= 400 and code < 500
+end
+
+# Checks if status code is server error (5xx)
+function http_is_server_error(code)
+    return code >= 500 and code < 600
+end
+
+# Checks if status code represents an error (4xx, 5xx, or negative)
+function http_is_error(code)
+    return code >= 400 or code < 0
+end

@@ -1,0 +1,61 @@
+# Test suite for HTTP Client configuration, headers, and response processing
+import "std/test"
+import "../src/lib.alya" as http
+
+function main()
+    test_suite("HTTP Client Tests")
+    let r = runner_new()
+
+    # 1. Client initialization
+    let c = http::client_new(5000, 1, 3)
+    let c_timeout = c.timeout_ms
+    runner_assert_eq(r, c_timeout, 5000, "client timeout_ms")
+    let c_redir = c.follow_redirects
+    runner_assert_eq(r, c_redir, 1, "client follow_redirects")
+    let c_max_redir = c.max_redirects
+    runner_assert_eq(r, c_max_redir, 3, "client max_redirects")
+
+    # 2. Setting default client headers
+    http::client_set_header(c, "Authorization", "Bearer token-xyz-789")
+    http::client_set_header(c, "User-Agent", "AlyaHTTP/0.1.0")
+    let h = c.headers
+    let v_auth = http::header_get(h, "Authorization")
+    runner_assert_str_eq(r, v_auth, "Bearer token-xyz-789", "header Authorization set")
+    let v_ua = http::header_get(h, "User-Agent")
+    runner_assert_str_eq(r, v_ua, "AlyaHTTP/0.1.0", "header User-Agent set")
+
+    # 3. High-level client helper defaults
+    let c_def = http::client()
+    let c_def_timeout = c_def.timeout_ms
+    runner_assert_eq(r, c_def_timeout, 10000, "default client timeout 10000")
+    let c_def_redir = c_def.follow_redirects
+    runner_assert_eq(r, c_def_redir, 1, "default client follow_redirects 1")
+
+    # 4. Invalid URL handling without crash
+    let res_inv = http::client_execute(c, "GET", "not_a_valid_url")
+    let sc_inv = res_inv.status_code
+    runner_assert_eq(r, sc_inv, -1, "invalid URL returns status -1")
+
+    # 5. Client response parsing verification
+    let raw_resp = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nServer: Alya\r\nSet-Cookie: sid=abc12345; Path=/\r\n\r\n{\"success\":true}"
+    let parsed = http::http_parse_response(raw_resp)
+    let p_code = parsed.status_code
+    runner_assert_eq(r, p_code, 200, "parsed response status code")
+    let p_text = parsed.status_text
+    runner_assert_str_eq(r, p_text, "OK", "parsed response status text")
+    let p_body = parsed.body
+    runner_assert_str_eq(r, p_body, "{\"success\":true}", "parsed response body")
+    let p_headers = parsed.headers
+    let p_srv = http::header_get(p_headers, "Server")
+    runner_assert_str_eq(r, p_srv, "Alya", "parsed header Server")
+    let p_cookies = parsed.cookies
+    let p_cookie_count = len(p_cookies)
+    runner_assert_eq(r, p_cookie_count, 1, "parsed cookie count")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

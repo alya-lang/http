@@ -1,28 +1,56 @@
-# Benchmark suite for http
+# Benchmark suite for alya-lang/http
 import "std/bench"
-import "../src/lib.alya" as pkg
+import "../src/lib.alya" as http
 
-function main()
-    let runner = bench_runner("http Micro-Benchmarks")
-
-    bench_start(runner, 100000)
-    let i = 0
-    while i < 100000
-        pkg::hello("Alya")
-        i += 1
-    end
-    bench_stop(runner, "hello() 100k calls")
-
-    bench_start(runner, 50000)
-    let j = 0
-    while j < 50000
-        let cfg = pkg::new_config("Bench", 1)
-        pkg::core_format_custom(cfg)
-        j += 1
-    end
-    bench_stop(runner, "new_config() + format_custom() 50k calls")
-
-    bench_summary(runner)
+function dummy_handler(ctx)
+    return http::ctx_json(ctx, 200, "{\"ok\":true}")
 end
 
-main()
+let runner = bench_runner("alya-lang/http Micro-Benchmarks")
+
+# 1. Response serialization & status text resolution
+bench_start(runner, 100000)
+let i = 0
+while i < 100000
+    let txt = http::http_status_text(200)
+    let is_ok = http::http_is_success(200)
+    i += 1
+end
+bench_stop(runner, "Status text & code checks (100k)")
+
+# 2. HTTP response parsing (Status line + headers + body)
+let raw = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 15\r\n\r\n{\"status\":\"ok\"}"
+bench_start(runner, 50000)
+let j = 0
+while j < 50000
+    let resp = http::http_parse_response(raw)
+    j += 1
+end
+bench_stop(runner, "HTTP response parsing (50k)")
+
+# 3. Router route registration & dispatch matching
+let r = http::router()
+http::router_get(r, "/api/v1/users", dummy_handler)
+http::router_get(r, "/api/v1/users/:id", dummy_handler)
+http::router_post(r, "/api/v1/users", dummy_handler)
+http::router_get(r, "/api/v1/posts/:postId/comments/:commentId", dummy_handler)
+
+bench_start(runner, 50000)
+let k = 0
+while k < 50000
+    let match_res = http::router_match(r, "GET", "/api/v1/posts/42/comments/108")
+    k += 1
+end
+bench_stop(runner, "Router param matching (50k)")
+
+# 4. Cookie creation and formatting
+bench_start(runner, 50000)
+let m = 0
+while m < 50000
+    let c = http::cookie_new("session_token", "abc123xyz", "/", 3600, 1, 1, "Strict")
+    let str_cookie = http::cookie_format(c)
+    m += 1
+end
+bench_stop(runner, "Cookie create & format (50k)")
+
+bench_summary(runner)

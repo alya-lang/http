@@ -1,15 +1,40 @@
-# Example usage of http
-import "../src/lib.alya" as pkg
+# General Feature Tour of alya-lang/http
+import "../src/lib.alya" as http
 
-function main()
-    # Basic greeting
-    let msg = pkg::hello("Alya Developer")
-    say msg
-
-    # Using configuration struct
-    let cfg = pkg::new_config("Modular Architecture", 5)
-    say "Target: " + cfg.name
-    say "Formatted: " + pkg::core_format_custom(cfg)
+function handle_hello(ctx)
+    return http::ctx_json(ctx, 200, "{\"message\":\"Hello from Alya HTTP!\"}")
 end
 
-main()
+function handle_user(ctx)
+    let uid = http::ctx_param(ctx, "id")
+    return http::ctx_json(ctx, 200, "{\"userId\":\"" + uid + "\"}")
+end
+
+say "=== alya-lang/http Feature Tour ==="
+
+# 1. Status Codes & Introspection
+say "Status 200: " + http::http_status_text(200) + " (Success? " + str(http::http_is_success(200)) + ")"
+say "Status 404: " + http::http_status_text(404) + " (Client Error? " + str(http::http_is_client_error(404)) + ")"
+
+# 2. Cookies
+let session = http::cookie("session_token", "sec_token_9999", "/", 3600, 1, 1, "Strict")
+say "Set-Cookie Header: " + http::cookie_format(session)
+
+# 3. Router & Route Matching
+let r = http::router()
+http::router_get(r, "/hello", handle_hello)
+http::router_get(r, "/users/:id", handle_user)
+
+let match_res = http::router_match(r, "GET", "/users/42")
+if match_res.found == 1
+    say "Route Match Found! Pattern: " + match_res.route
+    say "Param 'id': " + str_from_ptr(match_res.params["id"])
+end
+
+# 4. Response Parsing
+let raw = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nServer: Alya\r\n\r\n{\"ready\":true}"
+let parsed = http::http_parse_response(raw)
+say "Parsed Code: " + str(parsed.status_code)
+say "Parsed Body: " + parsed.body
+
+say "\nAll alya-lang/http features operational!"

@@ -1,0 +1,68 @@
+# Test suite for HTTP status codes and predicates
+import "std/test"
+import "../src/lib.alya" as http
+
+function main()
+    test_suite("HTTP Status Tests")
+    let r = runner_new()
+
+    # 1. Status Code Accessors
+    runner_assert_eq(r, http::status_ok(), 200, "status_ok is 200")
+    runner_assert_eq(r, http::status_created(), 201, "status_created is 201")
+    runner_assert_eq(r, http::status_no_content(), 204, "status_no_content is 204")
+    runner_assert_eq(r, http::status_moved_permanently(), 301, "status_moved_permanently is 301")
+    runner_assert_eq(r, http::status_found(), 302, "status_found is 302")
+    runner_assert_eq(r, http::status_not_modified(), 304, "status_not_modified is 304")
+    runner_assert_eq(r, http::status_bad_request(), 400, "status_bad_request is 400")
+    runner_assert_eq(r, http::status_unauthorized(), 401, "status_unauthorized is 401")
+    runner_assert_eq(r, http::status_forbidden(), 403, "status_forbidden is 403")
+    runner_assert_eq(r, http::status_not_found(), 404, "status_not_found is 404")
+    runner_assert_eq(r, http::status_method_not_allowed(), 405, "status_method_not_allowed is 405")
+    runner_assert_eq(r, http::status_conflict(), 409, "status_conflict is 409")
+    runner_assert_eq(r, http::status_too_many_requests(), 429, "status_too_many_requests is 429")
+    runner_assert_eq(r, http::status_internal_server_error(), 500, "status_internal_server_error is 500")
+    runner_assert_eq(r, http::status_bad_gateway(), 502, "status_bad_gateway is 502")
+
+    # 2. Status Text Introspection
+    runner_assert_str_eq(r, http::http_status_text(200), "OK", "200 is OK")
+    runner_assert_str_eq(r, http::http_status_text(201), "Created", "201 is Created")
+    runner_assert_str_eq(r, http::http_status_text(204), "No Content", "204 is No Content")
+    runner_assert_str_eq(r, http::http_status_text(301), "Moved Permanently", "301 is Moved Permanently")
+    runner_assert_str_eq(r, http::http_status_text(400), "Bad Request", "400 is Bad Request")
+    runner_assert_str_eq(r, http::http_status_text(404), "Not Found", "404 is Not Found")
+    runner_assert_str_eq(r, http::http_status_text(405), "Method Not Allowed", "405 is Method Not Allowed")
+    runner_assert_str_eq(r, http::http_status_text(418), "I'm a teapot", "418 is I'm a teapot")
+    runner_assert_str_eq(r, http::http_status_text(500), "Internal Server Error", "500 is Internal Server Error")
+    runner_assert_str_eq(r, http::http_status_text(999), "Unknown Status", "999 is Unknown Status")
+
+    # 3. Predicates
+    runner_assert_eq(r, http::http_is_informational(100), 1, "100 is informational")
+    runner_assert_eq(r, http::http_is_informational(200), 0, "200 is not informational")
+
+    runner_assert_eq(r, http::http_is_success(200), 1, "200 is success")
+    runner_assert_eq(r, http::http_is_success(204), 1, "204 is success")
+    runner_assert_eq(r, http::http_is_success(404), 0, "404 is not success")
+
+    runner_assert_eq(r, http::http_is_redirect(301), 1, "301 is redirect")
+    runner_assert_eq(r, http::http_is_redirect(302), 1, "302 is redirect")
+    runner_assert_eq(r, http::http_is_redirect(200), 0, "200 is not redirect")
+
+    runner_assert_eq(r, http::http_is_client_error(400), 1, "400 is client error")
+    runner_assert_eq(r, http::http_is_client_error(404), 1, "404 is client error")
+    runner_assert_eq(r, http::http_is_client_error(500), 0, "500 is not client error")
+
+    runner_assert_eq(r, http::http_is_server_error(500), 1, "500 is server error")
+    runner_assert_eq(r, http::http_is_server_error(503), 1, "503 is server error")
+    runner_assert_eq(r, http::http_is_server_error(404), 0, "404 is not server error")
+
+    runner_assert_eq(r, http::http_is_error(404), 1, "404 is error")
+    runner_assert_eq(r, http::http_is_error(500), 1, "500 is error")
+    runner_assert_eq(r, http::http_is_error(200), 0, "200 is not error")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

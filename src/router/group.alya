@@ -1,0 +1,53 @@
+# HTTP Route Groups
+# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "./router.alya"
+
+struct RouteGroup
+    router
+    prefix
+end
+
+# Creates a new RouteGroup attached to a router
+function group_new(router, prefix)
+    return RouteGroup {
+        router: router,
+        prefix: prefix
+    }
+end
+
+# Registers a GET route in this group
+function group_get(g, pattern, action)
+    return router_group_add(g.router, g.prefix, "GET", pattern, action)
+end
+
+# Registers a POST route in this group
+function group_post(g, pattern, action)
+    return router_group_add(g.router, g.prefix, "POST", pattern, action)
+end
+
+# Registers a PUT route in this group
+function group_put(g, pattern, action)
+    return router_group_add(g.router, g.prefix, "PUT", pattern, action)
+end
+
+# Registers a DELETE route in this group
+function group_delete(g, pattern, action)
+    return router_group_add(g.router, g.prefix, "DELETE", pattern, action)
+end
+
+# Registers a PATCH route in this group
+function group_patch(g, pattern, action)
+    return router_group_add(g.router, g.prefix, "PATCH", pattern, action)
+end
+
+# Registers an ANY route in this group
+function group_any(g, pattern, action)
+    return router_group_add(g.router, g.prefix, "ANY", pattern, action)
+end
+
+# Creates a nested sub-group under this group prefix
+function group_subgroup(g, sub_prefix)
+    let full_prefix = _router_join_prefix(g.prefix, sub_prefix)
+    return group_new(g.router, full_prefix)
+end

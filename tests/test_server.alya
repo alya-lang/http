@@ -1,0 +1,97 @@
+# Test suite for HTTP Server configuration, processing, and lifecycle
+import "std/test"
+import "../src/lib.alya" as http
+
+function main()
+    test_suite("HTTP Server Tests")
+    let r = runner_new()
+
+    let rt = http::router()
+    http::router_get(rt, "/api/users/:id", "get_user")
+    http::router_post(rt, "/api/users", "create_user")
+
+    # 1. Server initialization
+    let s = http::server_new(9876, "127.0.0.1", rt)
+    let s_port = s.port
+    runner_assert_eq(r, s_port, 9876, "server port")
+    let s_host = s.host
+    runner_assert_str_eq(r, s_host, "127.0.0.1", "server host")
+    let s_run = s.running
+    runner_assert_eq(r, s_run, 0, "server not running initially")
+
+    # 2. Enable middleware options
+    http::server_enable_cors(s, "https://client.example.com", "GET, POST, OPTIONS", "Content-Type", 1, 7200)
+    http::server_enable_logger(s, 1)
+    let opt = s.options
+    let opt_cors = opt["cors_enabled"]
+    runner_assert_eq(r, opt_cors, 1, "cors enabled")
+    let opt_log = opt["logger_enabled"]
+    runner_assert_eq(r, opt_log, 1, "logger enabled")
+
+    # 3. Request processing - Match found
+    let req1 = http::request_create("GET", "/api/users/99")
+    let ctx1 = http::ctx_new(req1)
+    let m1 = http::server_process(s, ctx1)
+    let f1 = m1.found
+    runner_assert_eq(r, f1, 1, "server_process match found")
+    let a1 = m1.action
+    runner_assert_str_eq(r, a1, "get_user", "server_process match action")
+    let p1 = ctx1.req.params
+    let id1 = p1["id"]
+    runner_assert_str_eq(r, id1, "99", "server_process params injected")
+
+    # 4. Request processing - Method Not Allowed (405)
+    let req2 = http::request_create("PUT", "/api/users/99")
+    let ctx2 = http::ctx_new(req2)
+    let m2 = http::server_process(s, ctx2)
+    let f2 = m2.found
+    runner_assert_eq(r, f2, 0, "405 route not found")
+    let st2 = m2.status
+    runner_assert_eq(r, st2, 405, "405 status returned")
+    let res2 = ctx2.res
+    let sc2 = res2.status_code
+    runner_assert_eq(r, sc2, 405, "ctx2 status 405")
+    let h2 = res2.headers
+    let v_allow = http::header_get(h2, "Allow")
+    runner_assert_str_eq(r, v_allow, "GET", "Allow header contains GET")
+
+    # 5. Request processing - Not Found (404)
+    let req3 = http::request_create("GET", "/non_existent")
+    let ctx3 = http::ctx_new(req3)
+    let m3 = http::server_process(s, ctx3)
+    let f3 = m3.found
+    runner_assert_eq(r, f3, 0, "404 route not found")
+    let res3 = ctx3.res
+    let sc3 = res3.status_code
+    runner_assert_eq(r, sc3, 404, "ctx3 status 404")
+
+    # 6. Request processing - CORS Preflight
+    let req4 = http::request_create("OPTIONS", "/api/users")
+    let ctx4 = http::ctx_new(req4)
+    let m4 = http::server_process(s, ctx4)
+    let st4 = m4.status
+    runner_assert_eq(r, st4, 204, "cors preflight status 204")
+    let ab4 = ctx4.aborted
+    runner_assert_eq(r, ab4, 1, "cors preflight aborted")
+    let res4 = ctx4.res
+    let h4 = res4.headers
+    let v_cors_origin = http::header_get(h4, "Access-Control-Allow-Origin")
+    runner_assert_str_eq(r, v_cors_origin, "https://client.example.com", "CORS origin header set")
+
+    # 7. Socket lifecycle
+    let start_res = http::server_start(s)
+    if start_res >= 0
+        let r_started = s.running
+        runner_assert_eq(r, r_started, 1, "server running after start")
+        http::server_close(s)
+        let r_stopped = s.running
+        runner_assert_eq(r, r_stopped, 0, "server stopped after close")
+    end
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

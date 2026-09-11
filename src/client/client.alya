@@ -1,0 +1,234 @@
+# HTTP Client Struct and Request Runner
+# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "std/net" as net
+import "url" as url_pkg
+import "../types.alya"
+import "../core/status.alya"
+import "../core/headers.alya"
+import "../core/protocol.alya"
+
+# Creates a new HttpClient instance
+function client_new(timeout_ms = 10000, follow_redirects = 1, max_redirects = 5)
+    return HttpClient {
+        timeout_ms: timeout_ms,
+        headers: {},
+        follow_redirects: follow_redirects,
+        max_redirects: max_redirects
+    }
+end
+
+# Sets a default header on the client
+function client_set_header(client, key, val)
+    if client != null
+        header_set(client.headers, key, val)
+    end
+    return client
+end
+
+# Internal HTTPS bridge via system curl
+function _client_curl_bridge(method, url_str, headers, body, timeout_ms, follow_redirects, max_redirects)
+    let tmp_out = "temp_alya_http_out_" + str(clock_ms()) + ".tmp"
+    let tmp_body = "temp_alya_http_body_" + str(clock_ms()) + ".tmp"
+    let sec_timeout = to_int(timeout_ms / 1000)
+    if sec_timeout <= 0
+        sec_timeout = 10
+    end
+
+    let cmd = "curl -s -i -m " + str(sec_timeout) + " -X " + method + " "
+
+    if follow_redirects == 1
+        cmd = cmd + "-L --max-redirs " + str(max_redirects) + " "
+    end
+
+    if headers != null
+        let hkeys = headers.keys()
+        let ki = 0
+        while ki < len(hkeys)
+            let hk = hkeys[ki]
+            let hv = headers[hk]
+            cmd = cmd + "-H \"" + hk + ": " + hv + "\" "
+            ki += 1
+        end
+    end
+
+    if len(body) > 0
+        write_file(tmp_body, body)
+        cmd = cmd + "--data-binary \"@" + tmp_body + "\" "
+    end
+
+    if target_os() == "windows"
+        cmd = cmd + "\"" + url_str + "\" > " + tmp_out + " 2>NUL"
+    else
+        cmd = cmd + "\"" + url_str + "\" > " + tmp_out + " 2>/dev/null"
+    end
+
+    system_exec(cmd)
+
+    let raw_resp = ""
+    if file_exists(tmp_out) == 1
+        raw_resp = read_file(tmp_out)
+        remove_file(tmp_out)
+    end
+    if file_exists(tmp_body) == 1
+        remove_file(tmp_body)
+    end
+
+    return http_parse_response(raw_resp)
+end
+
+# Performs an HTTP request using raw TCP socket or HTTPS bridge
+function client_execute(client, method, url_str, extra_headers = null, body = "")
+    let parsed = url_pkg::url_parse(url_str)
+    let host = parsed.host
+    if host == ""
+        # Fallback to url_host for backward compatibility with older Url struct
+        host = parsed.url_host
+    end
+    if host == ""
+        return HttpResponse(-1, "Invalid URL host: " + url_str, {}, "", [])
+    end
+
+    let scheme = parsed.scheme
+    if scheme == ""
+        scheme = parsed.url_scheme
+    end
+
+    let p_str = url_pkg::url_effective_port(parsed)
+    let effective_port = 0
+    if len(p_str) > 0
+        effective_port = to_int(p_str)
+    end
+    if effective_port <= 0
+        if scheme == "https"
+            effective_port = 443
+        else
+            effective_port = 80
+        end
+    end
+
+    # Merge client default headers and extra headers
+    let req_headers = {}
+    if client != null and client.headers != null
+        let ckeys = client.headers.keys()
+        let ci = 0
+        while ci < len(ckeys)
+            let ck = ckeys[ci]
+            req_headers[ck] = client.headers[ck]
+            ci += 1
+        end
+    end
+    if extra_headers != null
+        let ekeys = extra_headers.keys()
+        let ei = 0
+        while ei < len(ekeys)
+            let ek = ekeys[ei]
+            req_headers[lower(ek)] = extra_headers[ek]
+            ei += 1
+        end
+    end
+
+    let timeout_ms = 10000
+    let follow = 1
+    let max_redirs = 5
+    if client != null
+        timeout_ms = client.timeout_ms
+        follow = client.follow_redirects
+        max_redirs = client.max_redirects
+    end
+
+    # Delegate HTTPS to curl bridge
+    if scheme == "https" or effective_port == 443
+        return _client_curl_bridge(method, url_str, req_headers, body, timeout_ms, follow, max_redirs)
+    end
+
+    # Native TCP socket request for standard HTTP
+    let sock = net::tcp_connect(host, effective_port)
+    if sock < 0
+        return HttpResponse(-1, "Connection failed to " + host + ":" + str(effective_port), {}, "", [])
+    end
+
+    net::tcp_set_timeout(sock, timeout_ms)
+
+    let path = parsed.path
+    if path == ""
+        path = parsed.url_path
+    end
+    if path == ""
+        path = "/"
+    end
+    let q = parsed.query
+    if q == ""
+        q = parsed.url_query
+    end
+    if q != ""
+        path = path + "?" + q
+    end
+
+    let req_line = method + " " + path + " HTTP/1.1\r\n"
+    let wire = req_line + "Host: " + host + "\r\nUser-Agent: Alya-Http/0.1.0\r\nConnection: close\r\n"
+    if len(body) > 0
+        wire = wire + "Content-Length: " + str(len(body)) + "\r\n"
+    end
+    wire = wire + headers_format(req_headers)
+    wire = wire + "\r\n"
+    if len(body) > 0
+        wire = wire + body
+    end
+
+    net::tcp_send(sock, wire)
+
+    let raw_resp = ""
+    let content_length = -1
+    let header_end_idx = -1
+
+    while 1
+        let chunk = net::tcp_recv(sock, 4096)
+        if chunk == "" or len(chunk) == 0
+            break
+        end
+        raw_resp = raw_resp + chunk
+
+        if header_end_idx < 0
+            let sep = _proto_find(raw_resp, "\r\n\r\n", 0)
+            if sep >= 0
+                header_end_idx = sep + 4
+                let hpart = lower(substring(raw_resp, 0, sep))
+                let cl_idx = _proto_find(hpart, "content-length:", 0)
+                if cl_idx >= 0
+                    let val_start = cl_idx + 15
+                    let val_end = _proto_find(hpart, "\r\n", val_start)
+                    if val_end < 0
+                        val_end = _proto_find(hpart, "\n", val_start)
+                    end
+                    if val_end >= 0
+                        let cl_str = trim(substring(hpart, val_start, val_end - val_start))
+                        content_length = to_int(cl_str)
+                    end
+                end
+            end
+        end
+
+        if header_end_idx >= 0 and content_length >= 0
+            let cur_body_len = len(raw_resp) - header_end_idx
+            if cur_body_len >= content_length
+                break
+            end
+        end
+    end
+
+    net::tcp_close(sock)
+    let resp = http_parse_response(raw_resp)
+
+    # Handle HTTP redirects if configured
+    if follow == 1 and http_is_redirect(resp.status_code) and max_redirs > 0
+        let loc = header_get(resp.headers, "location", "")
+        if loc != ""
+            let next_url = url_pkg::url_join(url_str, loc)
+            client.max_redirects = max_redirs - 1
+            return client_execute(client, "GET", next_url, extra_headers, "")
+        end
+    end
+
+    return resp
+end

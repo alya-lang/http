@@ -1,0 +1,71 @@
+# Test suite for HTTP middlewares (CORS, Logger, Recovery, Static)
+import "std/test"
+import "../src/lib.alya" as http
+
+function main()
+    test_suite("HTTP Middleware Tests")
+    let r = runner_new()
+
+    # 1. CORS standard request
+    let req_cors = http::request_create("GET", "/api/data")
+    let ctx1 = http::ctx_new(req_cors)
+    let cors_cfg = http::cors_config_new("https://example.com", "GET, POST", "Content-Type", 1, 3600)
+    let handled1 = http::mw_apply_cors(ctx1, cors_cfg)
+
+    runner_assert_eq(r, handled1, 0, "standard request not aborted by CORS")
+    let res1 = ctx1.res
+    let h1 = res1.headers
+    let v_orig = h1["access-control-allow-origin"]
+    runner_assert_str_eq(r, v_orig, "https://example.com", "CORS allow origin set")
+    let v_cred = h1["access-control-allow-credentials"]
+    runner_assert_str_eq(r, v_cred, "true", "CORS allow credentials set")
+
+    # 2. CORS preflight OPTIONS request
+    let req_preflight = http::request_create("OPTIONS", "/api/data")
+    let ctx2 = http::ctx_new(req_preflight)
+    let handled2 = http::mw_apply_cors(ctx2, cors_cfg)
+
+    runner_assert_eq(r, handled2, 1, "preflight request handled by CORS")
+    let ab2 = ctx2.aborted
+    runner_assert_eq(r, ab2, 1, "preflight aborts context")
+    let res2 = ctx2.res
+    let sc2 = res2.status_code
+    runner_assert_eq(r, sc2, 204, "preflight status 204")
+
+    # 3. Recovery middleware
+    let req_rec = http::request_create("GET", "/crash")
+    let ctx3 = http::ctx_new(req_rec)
+    http::mw_apply_recovery(ctx3, "Database connection failed")
+
+    let res3 = ctx3.res
+    let sc3 = res3.status_code
+    runner_assert_eq(r, sc3, 500, "recovery status 500")
+    let st3 = res3.status_text
+    runner_assert_str_eq(r, st3, "Internal Server Error", "recovery status text")
+    let ab3 = ctx3.aborted
+    runner_assert_eq(r, ab3, 1, "recovery aborts context")
+    let h3 = res3.headers
+    let ct3 = h3["content-type"]
+    runner_assert_str_eq(r, ct3, "application/json; charset=utf-8", "recovery content-type")
+
+    # 4. Logger formatting
+    let log_str = http::mw_format_log("POST", "/users", 201, 15, "192.168.1.100")
+    runner_assert_str_eq(r, log_str, "[HTTP] POST /users 201 - 15ms (192.168.1.100)", "mw_format_log")
+
+    # 5. Static files directory traversal rejection
+    let req_trav = http::request_create("GET", "/assets/../../etc/passwd")
+    let ctx4 = http::ctx_new(req_trav)
+    let trav_handled = http::mw_serve_static(ctx4, "/assets", ".")
+
+    runner_assert_eq(r, trav_handled, 1, "traversal attempt caught")
+    let res4 = ctx4.res
+    let sc4 = res4.status_code
+    runner_assert_eq(r, sc4, 403, "traversal responds with 403")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

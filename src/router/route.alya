@@ -1,0 +1,107 @@
+# HTTP Route Definition and Path Pattern Matching
+# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "../types.alya"
+
+# Splits a URL path into clean, non-empty segments
+function route_split_path(path)
+    if path == null or len(path) == 0 or path == "/"
+        return []
+    end
+
+    let cleaned = path
+    # Trim leading slash
+    if substring(cleaned, 0, 1) == "/"
+        cleaned = substring(cleaned, 1, len(cleaned) - 1)
+    end
+    # Trim trailing slash
+    if len(cleaned) > 0 and substring(cleaned, len(cleaned) - 1, 1) == "/"
+        cleaned = substring(cleaned, 0, len(cleaned) - 1)
+    end
+
+    if len(cleaned) == 0
+        return []
+    end
+
+    let raw_parts = split(cleaned, "/")
+    let segments = []
+    let i = 0
+    while i < len(raw_parts)
+        let part = raw_parts[i]
+        if len(part) > 0
+            push(segments, part)
+        end
+        i += 1
+    end
+    return segments
+end
+
+# Creates a new HttpRoute definition struct
+function route_new(method, pattern, action)
+    let m = upper(trim(method))
+    let segs = route_split_path(pattern)
+    return HttpRoute {
+        method: m,
+        action: action,
+        pattern: pattern,
+        segments: segs
+    }
+end
+
+# Matches a request path against a route pattern's segments
+# Returns Map: {"matched": 1, "params": {...}} or {"matched": 0}
+function route_match_segments(pat_segs, req_segs)
+    let plen = len(pat_segs)
+    let rlen = len(req_segs)
+    let params = {}
+
+    let pi = 0
+    let ri = 0
+
+    while pi < plen
+        let p_seg = pat_segs[pi]
+
+        # Check for wildcard *param (matches the rest of the path)
+        if len(p_seg) > 0 and substring(p_seg, 0, 1) == "*"
+            let wild_name = substring(p_seg, 1, len(p_seg) - 1)
+            let remaining = ""
+            while ri < rlen
+                if len(remaining) > 0
+                    remaining = remaining + "/"
+                end
+                remaining = remaining + req_segs[ri]
+                ri += 1
+            end
+            if len(wild_name) > 0
+                params[wild_name] = remaining
+            end
+            return {"matched": 1, "params": params}
+        end
+
+        # If we ran out of request segments before matching all pattern segments
+        if ri >= rlen
+            return {"matched": 0, "params": {}}
+        end
+
+        let r_seg = req_segs[ri]
+
+        # Check for named param :param
+        if len(p_seg) > 0 and substring(p_seg, 0, 1) == ":"
+            let param_name = substring(p_seg, 1, len(p_seg) - 1)
+            params[param_name] = r_seg
+        elif p_seg != r_seg
+            # Static segment mismatch
+            return {"matched": 0, "params": {}}
+        end
+
+        pi += 1
+        ri += 1
+    end
+
+    # If both ended at the same time, it's a match
+    if ri == rlen
+        return {"matched": 1, "params": params}
+    end
+
+    return {"matched": 0, "params": {}}
+end

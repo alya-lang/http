@@ -1,14 +1,48 @@
-# http library
+# http - Production-ready HTTP Client, Server, Router, and Middleware for Alya
 # Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
 import "./types.alya"
-import "./core/formatter.alya"
+import "./core/status.alya"
+import "./core/headers.alya"
+import "./core/cookies.alya"
+import "./core/protocol.alya"
+import "./router/route.alya"
+import "./router/router.alya"
+import "./router/group.alya"
+import "./middleware/cors.alya"
+import "./middleware/logger.alya"
+import "./middleware/recovery.alya"
+import "./middleware/static.alya"
+import "./server/context.alya"
+import "./server/server.alya"
+import "./client/client.alya"
+import "./client/methods.alya"
 
-# Public facade functions
-function hello(name = "World")
-    return core_format_greeting(name)
+# ═══════════════════════════════════════════════════════════════
+# High-Level Idiomatic API
+# ═══════════════════════════════════════════════════════════════
+
+# Creates an HTTP server on port and host
+function server(port = 8080, host = "0.0.0.0", router_inst = null)
+    return server_new(port, host, router_inst)
 end
 
-function new_config(name = "World", count = 1)
-    return make_config(name, count)
+# Creates a new HTTP router
+function router(not_found_action = "not_found")
+    return router_new(not_found_action)
+end
+
+# Creates a new HTTP client
+function client(timeout_ms = 10000, follow_redirects = 1, max_redirects = 5)
+    return client_new(timeout_ms, follow_redirects, max_redirects)
+end
+
+# Creates a new HTTP cookie
+function cookie(name, value, path = "/", max_age = -1, http_only = 0, secure = 0, same_site = "Lax")
+    return cookie_new(name, value, path, max_age, http_only, secure, same_site)
+end
+
+# Creates a new CORS config
+function cors(origin = "*", methods = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH", headers = "Content-Type, Authorization, X-Requested-With")
+    return cors_config_new(origin, methods, headers)
 end

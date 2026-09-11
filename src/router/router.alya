@@ -1,0 +1,137 @@
+# HTTP Router Implementation
+# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "../types.alya"
+import "./route.alya"
+
+# Creates a new HttpRouter instance
+function router_new(not_found_action = "not_found")
+    return HttpRouter {
+        routes: [],
+        not_found_action: not_found_action
+    }
+end
+
+# Adds a new route rule to the router
+function router_add(r, method, pattern, action)
+    if r == null
+        return null
+    end
+    let route = route_new(method, pattern, action)
+    push(r.routes, route)
+    return r
+end
+
+# Registers a GET route
+function router_get(r, pattern, action)
+    return router_add(r, "GET", pattern, action)
+end
+
+# Registers a POST route
+function router_post(r, pattern, action)
+    return router_add(r, "POST", pattern, action)
+end
+
+# Registers a PUT route
+function router_put(r, pattern, action)
+    return router_add(r, "PUT", pattern, action)
+end
+
+# Registers a DELETE route
+function router_delete(r, pattern, action)
+    return router_add(r, "DELETE", pattern, action)
+end
+
+# Registers a PATCH route
+function router_patch(r, pattern, action)
+    return router_add(r, "PATCH", pattern, action)
+end
+
+# Registers a HEAD route
+function router_head(r, pattern, action)
+    return router_add(r, "HEAD", pattern, action)
+end
+
+# Registers an OPTIONS route
+function router_options(r, pattern, action)
+    return router_add(r, "OPTIONS", pattern, action)
+end
+
+# Registers a route matching ANY HTTP method
+function router_any(r, pattern, action)
+    return router_add(r, "ANY", pattern, action)
+end
+
+# Joins prefix and path pattern cleanly (e.g. "/api" + "/users/:id" -> "/api/users/:id")
+function _router_join_prefix(prefix, pattern)
+    if prefix == null or prefix == "" or prefix == "/"
+        return pattern
+    end
+    let p = prefix
+    if substring(p, len(p) - 1, 1) == "/"
+        p = substring(p, 0, len(p) - 1)
+    end
+    let pat = pattern
+    if substring(pat, 0, 1) == "/"
+        pat = substring(pat, 1, len(pat) - 1)
+    end
+    if pat == ""
+        return p
+    end
+    return p + "/" + pat
+end
+
+# Adds a route under a group prefix
+function router_group_add(r, prefix, method, pattern, action)
+    let full_pattern = _router_join_prefix(prefix, pattern)
+    return router_add(r, method, full_pattern, action)
+end
+
+# Helper to check if array contains item
+function _arr_has(arr, item)
+    let i = 0
+    while i < len(arr)
+        if arr[i] == item
+            return 1
+        end
+        i += 1
+    end
+    return 0
+end
+
+# Matches a request method and path against registered routes
+# Returns a RouteMatch struct
+function router_match(r, method, path)
+    if r == null
+        return RouteMatch(0, "not_found", "", {}, 404, [])
+    end
+
+    let req_method = upper(trim(method))
+    let req_segs = route_split_path(path)
+    let allowed_methods = []
+
+    let i = 0
+    let r_count = len(r.routes)
+    while i < r_count
+        let rt = r.routes[i]
+        let res = route_match_segments(rt.segments, req_segs)
+        if res["matched"] == 1
+            if rt.method == req_method or rt.method == "ANY" or rt.method == "*"
+                return RouteMatch(1, rt.action, rt.pattern, res["params"], 200, [])
+            else
+                if _arr_has(allowed_methods, rt.method) == 0
+                    push(allowed_methods, rt.method)
+                end
+            end
+        end
+        i += 1
+    end
+
+    # If path matched routes for other methods, return 405 Method Not Allowed
+    if len(allowed_methods) > 0
+        return RouteMatch(0, "method_not_allowed", "", {}, 405, allowed_methods)
+    end
+
+    # Otherwise return 404 Not Found
+    return RouteMatch(0, r.not_found_action, "", {}, 404, [])
+end

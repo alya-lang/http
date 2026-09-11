@@ -1,0 +1,45 @@
+# Test suite for HTTP header utilities
+import "std/test"
+import "../src/lib.alya" as http
+
+function main()
+    test_suite("HTTP Headers Tests")
+    let r = runner_new()
+
+    # 1. Header canonicalization
+    runner_assert_str_eq(r, http::header_canonical("content-type"), "Content-Type", "canonical content-type")
+    runner_assert_str_eq(r, http::header_canonical("accept-encoding"), "Accept-Encoding", "canonical accept-encoding")
+    runner_assert_str_eq(r, http::header_canonical("x-custom-header"), "X-Custom-Header", "canonical x-custom-header")
+    runner_assert_str_eq(r, http::header_canonical("etag"), "ETag", "canonical etag")
+    runner_assert_str_eq(r, http::header_canonical("host"), "Host", "canonical host")
+
+    # 2. Case-insensitive header get & set
+    let h = {}
+    http::header_set(h, "Content-Type", "application/json")
+    http::header_set(h, "authorization", "Bearer secret123")
+
+    runner_assert_eq(r, http::header_has(h, "content-type"), 1, "has lower content-type")
+    runner_assert_eq(r, http::header_has(h, "Content-Type"), 1, "has title Content-Type")
+    runner_assert_eq(r, http::header_has(h, "CONTENT-TYPE"), 1, "has upper CONTENT-TYPE")
+    runner_assert_eq(r, http::header_has(h, "Accept"), 0, "does not have Accept")
+
+    runner_assert_str_eq(r, http::header_get(h, "CONTENT-TYPE"), "application/json", "get CONTENT-TYPE")
+    runner_assert_str_eq(r, http::header_get(h, "Authorization"), "Bearer secret123", "get Authorization")
+    runner_assert_str_eq(r, http::header_get(h, "Non-Existent", "default_val"), "default_val", "get fallback default")
+
+    # 3. Header remove
+    let h2 = http::header_remove(h, "authorization")
+    runner_assert_eq(r, http::header_has(h2, "content-type"), 1, "h2 retains content-type")
+    runner_assert_eq(r, http::header_has(h2, "authorization"), 0, "h2 removed authorization")
+
+    # 4. Headers wire format serialization
+    let wire = http::headers_format(h)
+    runner_assert_eq(r, len(wire) > 0, 1, "headers_format produces non-empty wire string")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

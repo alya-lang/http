@@ -1,0 +1,82 @@
+# Test suite for HTTP router and route matching
+import "std/test"
+import "../src/lib.alya" as http
+
+function main()
+    test_suite("HTTP Router Tests")
+    let r = runner_new()
+
+    let rt = http::router()
+
+    # 1. Register routes
+    http::router_get(rt, "/", "action_home")
+    http::router_get(rt, "/about", "action_about")
+    http::router_post(rt, "/users", "action_create_user")
+    http::router_get(rt, "/users/:id", "action_get_user")
+    http::router_put(rt, "/users/:id", "action_update_user")
+    http::router_delete(rt, "/users/:id", "action_delete_user")
+    http::router_get(rt, "/posts/:post_id/comments/:comment_id", "action_post_comment")
+    http::router_get(rt, "/static/*filepath", "action_static")
+
+    # 2. Exact matches
+    let m1 = http::router_match(rt, "GET", "/")
+    runner_assert_eq(r, m1.found, 1, "match / found")
+    runner_assert_str_eq(r, m1.action, "action_home", "match / action")
+
+    let m2 = http::router_match(rt, "GET", "/about")
+    runner_assert_eq(r, m2.found, 1, "match /about found")
+    runner_assert_str_eq(r, m2.action, "action_about", "match /about action")
+
+    # 3. Parametric single param :id
+    let m3 = http::router_match(rt, "GET", "/users/42")
+    runner_assert_eq(r, m3.found, 1, "match /users/42 found")
+    runner_assert_str_eq(r, m3.action, "action_get_user", "match /users/42 action")
+    runner_assert_str_eq(r, m3.params["id"], "42", "extracted param id")
+
+    # 4. Parametric multiple params
+    let m4 = http::router_match(rt, "GET", "/posts/101/comments/555")
+    runner_assert_eq(r, m4.found, 1, "match /posts/101/comments/555 found")
+    runner_assert_str_eq(r, m4.action, "action_post_comment", "match action")
+    runner_assert_str_eq(r, m4.params["post_id"], "101", "extracted post_id")
+    runner_assert_str_eq(r, m4.params["comment_id"], "555", "extracted comment_id")
+
+    # 5. Wildcard match
+    let m5 = http::router_match(rt, "GET", "/static/css/theme/dark.css")
+    runner_assert_eq(r, m5.found, 1, "wildcard route matched")
+    runner_assert_str_eq(r, m5.action, "action_static", "wildcard action")
+    runner_assert_str_eq(r, m5.params["filepath"], "css/theme/dark.css", "extracted wildcard filepath")
+
+    # 6. Route groups and sub-groups
+    let g_api = http::group_new(rt, "/api/v1")
+    http::group_get(g_api, "/status", "action_api_status")
+    http::group_post(g_api, "/items", "action_api_create_item")
+
+    let g_auth = http::group_subgroup(g_api, "/auth")
+    http::group_post(g_auth, "/login", "action_auth_login")
+
+    let m6 = http::router_match(rt, "GET", "/api/v1/status")
+    runner_assert_eq(r, m6.found, 1, "group GET /api/v1/status found")
+    runner_assert_str_eq(r, m6.action, "action_api_status", "group action")
+
+    let m7 = http::router_match(rt, "POST", "/api/v1/auth/login")
+    runner_assert_eq(r, m7.found, 1, "nested group /api/v1/auth/login found")
+    runner_assert_str_eq(r, m7.action, "action_auth_login", "nested group action")
+
+    # 7. Method Not Allowed (405)
+    let m_405 = http::router_match(rt, "PATCH", "/about")
+    runner_assert_eq(r, m_405.found, 0, "405 not found")
+    runner_assert_eq(r, m_405.status, 405, "status is 405 Method Not Allowed")
+    runner_assert_str_eq(r, m_405.allowed_methods[0], "GET", "allowed method is GET")
+
+    # 8. Route Not Found (404)
+    let m_404 = http::router_match(rt, "GET", "/non/existent/path")
+    runner_assert_eq(r, m_404.found, 0, "404 not found")
+    runner_assert_eq(r, m_404.status, 404, "status is 404 Not Found")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

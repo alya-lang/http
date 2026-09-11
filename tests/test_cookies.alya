@@ -1,0 +1,41 @@
+# Test suite for HTTP cookies
+import "std/test"
+import "../src/lib.alya" as http
+
+function main()
+    test_suite("HTTP Cookies Tests")
+    let r = runner_new()
+
+    # 1. Cookie creation and formatting
+    let c1 = http::cookie("session_id", "abc123xyz")
+    let f1 = http::cookie_format(c1)
+    runner_assert_str_eq(r, f1, "session_id=abc123xyz; Path=/; SameSite=Lax", "cookie_format default")
+
+    let c2 = http::cookie("auth_token", "token999", "/api", 3600, 1, 1, "Strict")
+    let f2 = http::cookie_format(c2)
+    runner_assert_str_eq(r, f2, "auth_token=token999; Path=/api; Max-Age=3600; HttpOnly; Secure; SameSite=Strict", "cookie_format full options")
+
+    # 2. Cookie parsing
+    let raw_header = "session_id=abc123xyz; theme=dark; logged_in=true"
+    let parsed = http::cookie_parse(raw_header)
+    runner_assert_str_eq(r, parsed["session_id"], "abc123xyz", "parse session_id")
+    runner_assert_str_eq(r, parsed["theme"], "dark", "parse theme")
+    runner_assert_str_eq(r, parsed["logged_in"], "true", "parse logged_in")
+
+    # 3. Quoted cookie values
+    let raw_quoted = "quoted_val=\"hello world\"; simple=yes"
+    let parsed_q = http::cookie_parse(raw_quoted)
+    runner_assert_str_eq(r, parsed_q["quoted_val"], "hello world", "parse unquotes value")
+    runner_assert_str_eq(r, parsed_q["simple"], "yes", "parse simple value")
+
+    # 4. Empty and edge cases
+    let parsed_empty = http::cookie_parse("")
+    runner_assert_eq(r, len(parsed_empty), 0, "empty cookie header gives empty map")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

@@ -1,0 +1,108 @@
+# Test suite for HTTP Context and Response Builders
+import "std/test"
+import "../src/lib.alya" as http
+
+function main()
+    test_suite("HTTP Context Tests")
+    let r = runner_new()
+
+    let p = {"id": "42"}
+    let c = {"theme": "solarized"}
+    let qp = {"tab": "profile", "page": "3"}
+    let hdrs = {"User-Agent": "AlyaBrowser"}
+    let req = http::request_create("GET", "/users/42", "tab=profile&page=3", hdrs, "request_payload", "127.0.0.1:9090", p, c, qp)
+    let ctx = http::ctx_new(req)
+
+    # 1. Request accessors
+    let v_header = http::ctx_get_header(ctx, "User-Agent")
+    runner_assert_str_eq(r, v_header, "AlyaBrowser", "ctx_get_header")
+
+    let v_cookie = http::ctx_get_cookie(ctx, "theme")
+    runner_assert_str_eq(r, v_cookie, "solarized", "ctx_get_cookie")
+
+    let v_param = http::ctx_param(ctx, "id")
+    runner_assert_str_eq(r, v_param, "42", "ctx_param")
+
+    let v_param_int = http::ctx_param_int(ctx, "id")
+    runner_assert_eq(r, v_param_int, 42, "ctx_param_int")
+
+    let v_query = http::ctx_query(ctx, "tab")
+    runner_assert_str_eq(r, v_query, "profile", "ctx_query")
+
+    let v_body = http::ctx_body(ctx)
+    runner_assert_str_eq(r, v_body, "request_payload", "ctx_body")
+
+    # 2. Status & Header manipulation
+    http::ctx_status(ctx, 202)
+    let res1 = ctx.res
+    let c1 = res1.status_code
+    let t1 = res1.status_text
+    runner_assert_eq(r, c1, 202, "ctx_status code")
+    runner_assert_str_eq(r, t1, "Accepted", "ctx_status text")
+
+    http::ctx_header(ctx, "X-Powered-By", "Alya-Lang")
+    let res2 = ctx.res
+    let h2 = res2.headers
+    let v_h2 = http::header_get(h2, "X-Powered-By")
+    runner_assert_str_eq(r, v_h2, "Alya-Lang", "ctx_header set")
+
+    # 3. Cookie addition
+    http::ctx_cookie(ctx, "session", "sess_xyz", "/", 7200, 1, 1, "Strict")
+    let res3 = ctx.res
+    let cks = res3.cookies
+    runner_assert_eq(r, len(cks), 1, "ctx_cookie added")
+
+    # 4. Content response builders
+    http::ctx_text(ctx, "Sample plain text", 200)
+    let res4 = ctx.res
+    let h4 = res4.headers
+    let b4 = res4.body
+    let ct4 = h4["content-type"]
+    runner_assert_str_eq(r, b4, "Sample plain text", "ctx_text body")
+    runner_assert_str_eq(r, ct4, "text/plain; charset=utf-8", "ctx_text content-type")
+
+    http::ctx_json(ctx, "{\"status\": \"ok\"}", 201)
+    let res5 = ctx.res
+    let h5 = res5.headers
+    let c5 = res5.status_code
+    let ct5 = h5["content-type"]
+    runner_assert_eq(r, c5, 201, "ctx_json status 201")
+    runner_assert_str_eq(r, ct5, "application/json; charset=utf-8", "ctx_json content-type")
+
+    http::ctx_html(ctx, "<h1>Welcome</h1>")
+    let res6 = ctx.res
+    let h6 = res6.headers
+    let b6 = res6.body
+    let ct6 = h6["content-type"]
+    runner_assert_str_eq(r, b6, "<h1>Welcome</h1>", "ctx_html body")
+    runner_assert_str_eq(r, ct6, "text/html; charset=utf-8", "ctx_html content-type")
+
+    http::ctx_redirect(ctx, "/dashboard", 307)
+    let res7 = ctx.res
+    let h7 = res7.headers
+    let c7 = res7.status_code
+    let loc7 = h7["location"]
+    runner_assert_eq(r, c7, 307, "ctx_redirect status")
+    runner_assert_str_eq(r, loc7, "/dashboard", "ctx_redirect location")
+
+    http::ctx_not_found(ctx, "User not found")
+    let res8 = ctx.res
+    let c8 = res8.status_code
+    let b8 = res8.body
+    runner_assert_eq(r, c8, 404, "ctx_not_found status")
+    runner_assert_str_eq(r, b8, "User not found", "ctx_not_found body")
+
+    # 5. Abort lifecycle
+    let ab1 = ctx.aborted
+    runner_assert_eq(r, ab1, 0, "ctx not aborted initially")
+    http::ctx_abort(ctx)
+    let ab2 = ctx.aborted
+    runner_assert_eq(r, ab2, 1, "ctx aborted after call")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

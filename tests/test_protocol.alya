@@ -1,0 +1,62 @@
+# Test suite for HTTP/1.1 wire protocol parsing and serialization
+import "std/test"
+import "../src/lib.alya" as http
+
+function main()
+    test_suite("HTTP Protocol Tests")
+    let r = runner_new()
+
+    # 1. Parse simple GET request
+    let raw_get = "GET /api/users?page=2&limit=10 HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: AlyaClient\r\n\r\n"
+    let req1 = http::http_parse_request(raw_get, "127.0.0.1:54321")
+
+    runner_assert_str_eq(r, req1.method, "GET", "req1 method is GET")
+    runner_assert_str_eq(r, req1.path, "/api/users", "req1 path is /api/users")
+    runner_assert_str_eq(r, req1.query, "page=2&limit=10", "req1 query string")
+    runner_assert_str_eq(r, req1.query_params["page"], "2", "req1 query_params page")
+    runner_assert_str_eq(r, req1.query_params["limit"], "10", "req1 query_params limit")
+    runner_assert_str_eq(r, req1.headers["host"], "localhost:8080", "req1 header host")
+    runner_assert_str_eq(r, req1.remote_addr, "127.0.0.1:54321", "req1 remote_addr")
+
+    # 2. Parse POST request with body and cookies
+    let raw_post = "POST /submit HTTP/1.1\r\nContent-Type: application/json\r\nContent-Length: 17\r\nCookie: session=xyz987\r\n\r\n{\"status\":\"ok\"}"
+    let req2 = http::http_parse_request(raw_post)
+
+    runner_assert_str_eq(r, req2.method, "POST", "req2 method is POST")
+    runner_assert_str_eq(r, req2.path, "/submit", "req2 path is /submit")
+    runner_assert_str_eq(r, req2.body, "{\"status\":\"ok\"}", "req2 body matches")
+    runner_assert_str_eq(r, req2.cookies["session"], "xyz987", "req2 parsed cookie")
+
+    # 3. Parse HTTP response
+    let raw_resp = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 12\r\n\r\nHello World!"
+    let resp = http::http_parse_response(raw_resp)
+
+    runner_assert_eq(r, resp.status_code, 200, "resp status code 200")
+    runner_assert_str_eq(r, resp.status_text, "OK", "resp status text OK")
+    runner_assert_str_eq(r, resp.body, "Hello World!", "resp body matches")
+    runner_assert_str_eq(r, resp.headers["content-type"], "text/plain", "resp header content-type")
+
+    # 4. Format HTTP response
+    let out_res = http::response_create(201, "Created", {"X-Custom": "Test"}, "New Resource")
+    let wire_res = http::http_format_response(out_res)
+    runner_assert_eq(r, len(wire_res) > 0, 1, "wire response is non-empty")
+
+    let parsed_back = http::http_parse_response(wire_res)
+    runner_assert_eq(r, parsed_back.status_code, 201, "roundtrip status code 201")
+    runner_assert_str_eq(r, parsed_back.status_text, "Created", "roundtrip status text")
+    runner_assert_str_eq(r, parsed_back.body, "New Resource", "roundtrip body")
+
+    # 5. Format HTTP request
+    let out_req = http::request_create("GET", "/test", "filter=active")
+    let wire_req = http::http_format_request(out_req)
+    let parsed_req_back = http::http_parse_request(wire_req)
+    runner_assert_str_eq(r, parsed_req_back.method, "GET", "roundtrip req method")
+    runner_assert_str_eq(r, parsed_req_back.path, "/test", "roundtrip req path")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

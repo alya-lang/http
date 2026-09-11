@@ -1,0 +1,209 @@
+# HTTP Context Helpers and Response Builders
+# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "../types.alya"
+import "../core/status.alya"
+import "../core/headers.alya"
+import "../core/cookies.alya"
+
+# Creates a new HttpContext instance
+function ctx_new(req, res = null, client_sock = -1)
+    return context_create(req, res, client_sock)
+end
+
+# Sets response status code and optional status text
+function ctx_status(ctx, code, text = "")
+    if ctx == null
+        return ctx
+    end
+    let res = ctx.res
+    if res == null
+        return ctx
+    end
+    res.status_code = code
+    if text != ""
+        res.status_text = text
+    else
+        res.status_text = http_status_text(code)
+    end
+    return ctx
+end
+
+# Sets a response header on the context
+function ctx_header(ctx, key, val)
+    if ctx != null
+        let res = ctx.res
+        if res != null
+            header_set(res.headers, key, val)
+        end
+    end
+    return ctx
+end
+
+# Retrieves a request header by case-insensitive key
+function ctx_get_header(ctx, key, default_val = "")
+    if ctx == null
+        return default_val
+    end
+    let req = ctx.req
+    if req == null
+        return default_val
+    end
+    let hdrs = req.headers
+    return header_get(hdrs, key, default_val)
+end
+
+# Sets a cookie to be sent with the response
+function ctx_cookie(ctx, name, val, path = "/", max_age = -1, http_only = 0, secure = 0, same_site = "Lax")
+    if ctx != null
+        let res = ctx.res
+        if res != null
+            let c = cookie_new(name, val, path, max_age, http_only, secure, same_site)
+            let cks = res.cookies
+            push(cks, c)
+        end
+    end
+    return ctx
+end
+
+# Retrieves an incoming cookie value by name
+function ctx_get_cookie(ctx, name, default_val = "")
+    if ctx == null
+        return default_val
+    end
+    let req = ctx.req
+    if req == null
+        return default_val
+    end
+    let cks = req.cookies
+    if cks == null
+        return default_val
+    end
+    if has(cks, name)
+        return cks[name]
+    end
+    return default_val
+end
+
+# Retrieves a matched route path parameter by name (e.g. :id)
+function ctx_param(ctx, name, default_val = "")
+    if ctx == null
+        return default_val
+    end
+    let req = ctx.req
+    if req == null
+        return default_val
+    end
+    let p = req.params
+    if p == null
+        return default_val
+    end
+    if has(p, name)
+        return p[name]
+    end
+    return default_val
+end
+
+# Retrieves a matched route parameter parsed as integer
+function ctx_param_int(ctx, name, default_val = 0)
+    let p = ctx_param(ctx, name, "")
+    if p == ""
+        return default_val
+    end
+    return to_int(p)
+end
+
+# Retrieves a parsed query string parameter by key
+function ctx_query(ctx, name, default_val = "")
+    if ctx == null
+        return default_val
+    end
+    let req = ctx.req
+    if req == null
+        return default_val
+    end
+    let qp = req.query_params
+    if qp == null
+        return default_val
+    end
+    if has(qp, name)
+        return qp[name]
+    end
+    return default_val
+end
+
+# Retrieves the raw incoming request body
+function ctx_body(ctx)
+    if ctx == null
+        return ""
+    end
+    let req = ctx.req
+    if req == null
+        return ""
+    end
+    return req.body
+end
+
+# Sends a plain text response
+function ctx_text(ctx, text_content, status_code = 200)
+    ctx_status(ctx, status_code)
+    let res = ctx.res
+    header_set(res.headers, "Content-Type", "text/plain; charset=utf-8")
+    res.body = text_content
+    return ctx
+end
+
+# Sends a JSON response string
+function ctx_json(ctx, json_content, status_code = 200)
+    ctx_status(ctx, status_code)
+    let res = ctx.res
+    header_set(res.headers, "Content-Type", "application/json; charset=utf-8")
+    res.body = json_content
+    return ctx
+end
+
+# Sends an HTML response
+function ctx_html(ctx, html_content, status_code = 200)
+    ctx_status(ctx, status_code)
+    let res = ctx.res
+    header_set(res.headers, "Content-Type", "text/html; charset=utf-8")
+    res.body = html_content
+    return ctx
+end
+
+# Sends an HTTP redirect response
+function ctx_redirect(ctx, target_url, status_code = 302)
+    ctx_status(ctx, status_code)
+    let res = ctx.res
+    header_set(res.headers, "Location", target_url)
+    res.body = ""
+    return ctx
+end
+
+# Sends a 404 Not Found response
+function ctx_not_found(ctx, message = "Not Found")
+    return ctx_text(ctx, message, 404)
+end
+
+# Sends a 400 Bad Request response
+function ctx_bad_request(ctx, message = "Bad Request")
+    return ctx_text(ctx, message, 400)
+end
+
+# Sends a 401 Unauthorized response
+function ctx_unauthorized(ctx, message = "Unauthorized")
+    return ctx_text(ctx, message, 401)
+end
+
+# Sends a 403 Forbidden response
+function ctx_forbidden(ctx, message = "Forbidden")
+    return ctx_text(ctx, message, 403)
+end
+
+# Aborts request pipeline processing
+function ctx_abort(ctx)
+    if ctx != null
+        ctx.aborted = 1
+    end
+    return ctx
+end

@@ -1,0 +1,91 @@
+# HTTP Cookie Parsing and Formatting
+# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "../types.alya"
+
+# Creates a new HttpCookie struct
+function cookie_new(name, value, path = "/", max_age = -1, http_only = 0, secure = 0, same_site = "Lax")
+    return cookie_create(name, value, path, max_age, http_only, secure, same_site)
+end
+
+# Formats an HttpCookie struct into a valid Set-Cookie header value
+function cookie_format(c)
+    if c == null
+        return ""
+    end
+    let res = c.name + "=" + c.value
+
+    if c.path != null and c.path != ""
+        res = res + "; Path=" + c.path
+    end
+
+    if c.domain != null and c.domain != ""
+        res = res + "; Domain=" + c.domain
+    end
+
+    if c.max_age != null and c.max_age >= 0
+        res = res + "; Max-Age=" + str(c.max_age)
+    end
+
+    if c.expires != null and c.expires != ""
+        res = res + "; Expires=" + c.expires
+    end
+
+    if c.http_only == 1
+        res = res + "; HttpOnly"
+    end
+
+    if c.secure == 1
+        res = res + "; Secure"
+    end
+
+    if c.same_site != null and c.same_site != ""
+        res = res + "; SameSite=" + c.same_site
+    end
+
+    return res
+end
+
+# Internal helper to find substring
+function _cookie_find(s, target, start_idx = 0)
+    let slen = len(s)
+    let tlen = len(target)
+    if tlen == 0
+        return start_idx
+    end
+    let i = start_idx
+    while i + tlen <= slen
+        if substring(s, i, tlen) == target
+            return i
+        end
+        i += 1
+    end
+    return -1
+end
+
+# Parses incoming 'Cookie' header into a Map of name -> value
+function cookie_parse(raw)
+    if raw == null or len(raw) == 0
+        return {}
+    end
+
+    let out = {}
+    let pairs = split(raw, ";")
+    let i = 0
+    while i < len(pairs)
+        let item = trim(pairs[i])
+        if len(item) > 0
+            let eq = _cookie_find(item, "=", 0)
+            if eq > 0
+                let cname = trim(substring(item, 0, eq))
+                let cval = trim(substring(item, eq + 1, len(item) - (eq + 1)))
+                if len(cval) >= 2 and substring(cval, 0, 1) == "\"" and substring(cval, len(cval) - 1, 1) == "\""
+                    cval = substring(cval, 1, len(cval) - 2)
+                end
+                out[cname] = cval
+            end
+        end
+        i += 1
+    end
+    return out
+end
