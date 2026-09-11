@@ -159,7 +159,9 @@ main()
 | `http_get(url, headers)` | `url: string, headers: map` | Performs an HTTP GET request |
 | `http_post(url, body, content_type, headers)` | `url: string, body: string, ...` | Performs an HTTP POST request |
 | `http_put(url, body, content_type, headers)` | `url: string, body: string, ...` | Performs an HTTP PUT request |
+| `http_patch(url, body, content_type, headers)` | `url: string, body: string, ...` | Performs an HTTP PATCH request |
 | `http_delete(url, headers)` | `url: string, headers: map` | Performs an HTTP DELETE request |
+| `http_query(url, body, content_type, headers)` | `url: string, body: string, ...` | Performs an HTTP QUERY request (IETF safe method with body) |
 | `client_new(timeout_ms, follow_redirects, max_redirects)` | `timeout_ms: int, ...` | Instantiates a configured `HttpClient` |
 
 ### Server & Context API
@@ -177,11 +179,13 @@ main()
 | Method | Parameters | Description |
 |---|---|---|
 | `router_new(not_found_action)` | `not_found: string` | Instantiates a new route registry |
-| `router.get(pattern, handler)` | `pattern: string, handler: string` | Registers a GET route handler |
-| `router.post(pattern, handler)` | `pattern: string, handler: string` | Registers a POST route handler |
-| `router.put(pattern, handler)` | `pattern: string, handler: string` | Registers a PUT route handler |
-| `router.delete(pattern, handler)` | `pattern: string, handler: string` | Registers a DELETE route handler |
-| `router.group(prefix)` | `prefix: string` | Creates a new `RouteGroup` under this router |
+| `router_get(r, pattern, handler)` | `pattern: string, handler: string` | Registers a GET route handler |
+| `router_post(r, pattern, handler)` | `pattern: string, handler: string` | Registers a POST route handler |
+| `router_put(r, pattern, handler)` | `pattern: string, handler: string` | Registers a PUT route handler |
+| `router_delete(r, pattern, handler)` | `pattern: string, handler: string` | Registers a DELETE route handler |
+| `router_patch(r, pattern, handler)` | `pattern: string, handler: string` | Registers a PATCH route handler |
+| `router_query(r, pattern, handler)` | `pattern: string, handler: string` | Registers a QUERY route handler |
+| `router_group_add(r, prefix, ...)` | `prefix: string, ...` | Registers a route under a group prefix |
 
 ---
 

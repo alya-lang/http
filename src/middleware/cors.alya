@@ -13,7 +13,7 @@ struct CorsConfig
 end
 
 # Creates a new CorsConfig struct with sensible defaults
-function cors_config_new(origin = "*", methods = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH", headers = "Content-Type, Authorization, X-Requested-With", credentials = 0, max_age = 86400)
+function cors_config_new(origin = "*", methods = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH, QUERY", headers = "Content-Type, Authorization, X-Requested-With", credentials = 0, max_age = 86400)
     return CorsConfig {
         allow_origin: origin,
         allow_methods: methods,

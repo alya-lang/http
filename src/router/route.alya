@@ -64,14 +64,12 @@ function route_match_segments(pat_segs, req_segs)
         # Check for wildcard *param (matches the rest of the path)
         if len(p_seg) > 0 and substring(p_seg, 0, 1) == "*"
             let wild_name = substring(p_seg, 1, len(p_seg) - 1)
-            let remaining = ""
+            let rem_parts = []
             while ri < rlen
-                if len(remaining) > 0
-                    remaining = remaining + "/"
-                end
-                remaining = remaining + req_segs[ri]
+                push(rem_parts, req_segs[ri])
                 ri += 1
             end
+            let remaining = join(rem_parts, "/")
             if len(wild_name) > 0
                 params[wild_name] = remaining
             end
@@ -89,7 +87,7 @@ function route_match_segments(pat_segs, req_segs)
         if len(p_seg) > 0 and substring(p_seg, 0, 1) == ":"
             let param_name = substring(p_seg, 1, len(p_seg) - 1)
             params[param_name] = r_seg
-        elif p_seg != r_seg
+        elif streq(p_seg, r_seg) == 0
             # Static segment mismatch
             return {"matched": 0, "params": {}}
         end

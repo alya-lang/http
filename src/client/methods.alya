@@ -68,6 +68,17 @@ function http_options(url_str, headers = null)
     return http_request("OPTIONS", url_str, headers, "")
 end
 
+# Convenience QUERY request (IETF safe method with payload body)
+function http_query(url_str, body = "", content_type = "application/json", headers = null)
+    if headers == null
+        headers = {}
+    end
+    if content_type != null and content_type != ""
+        header_set(headers, "Content-Type", content_type)
+    end
+    return http_request("QUERY", url_str, headers, body)
+end
+
 # Generates standard HTTP Basic Authentication header string
 function basic_auth(username, password)
     return "Basic " + base64_encode(username + ":" + password)

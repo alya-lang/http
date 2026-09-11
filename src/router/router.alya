@@ -57,6 +57,11 @@ function router_options(r, pattern, action)
     return router_add(r, "OPTIONS", pattern, action)
 end
 
+# Registers a QUERY route (IETF safe method with request body)
+function router_query(r, pattern, action)
+    return router_add(r, "QUERY", pattern, action)
+end
+
 # Registers a route matching ANY HTTP method
 function router_any(r, pattern, action)
     return router_add(r, "ANY", pattern, action)

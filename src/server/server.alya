@@ -34,7 +34,7 @@ function server_new(port = 8080, host = "0.0.0.0", router = null)
 end
 
 # Enables CORS middleware on the server
-function server_enable_cors(server, origin = "*", methods = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH", headers = "Content-Type, Authorization, X-Requested-With", credentials = 0, max_age = 86400)
+function server_enable_cors(server, origin = "*", methods = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH, QUERY", headers = "Content-Type, Authorization, X-Requested-With", credentials = 0, max_age = 86400)
     server.options["cors_enabled"] = 1
     server.options["cors_config"] = cors_config_new(origin, methods, headers, credentials, max_age)
     return server

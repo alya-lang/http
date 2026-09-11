@@ -41,6 +41,21 @@ function group_patch(g, pattern, action)
     return router_group_add(g.router, g.prefix, "PATCH", pattern, action)
 end
 
+# Registers a HEAD route in this group
+function group_head(g, pattern, action)
+    return router_group_add(g.router, g.prefix, "HEAD", pattern, action)
+end
+
+# Registers an OPTIONS route in this group
+function group_options(g, pattern, action)
+    return router_group_add(g.router, g.prefix, "OPTIONS", pattern, action)
+end
+
+# Registers a QUERY route in this group (IETF safe method with request body)
+function group_query(g, pattern, action)
+    return router_group_add(g.router, g.prefix, "QUERY", pattern, action)
+end
+
 # Registers an ANY route in this group
 function group_any(g, pattern, action)
     return router_group_add(g.router, g.prefix, "ANY", pattern, action)

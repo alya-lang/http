@@ -62,13 +62,25 @@ function main()
     runner_assert_eq(r, m7.found, 1, "nested group /api/v1/auth/login found")
     runner_assert_str_eq(r, m7.action, "action_auth_login", "nested group action")
 
-    # 7. Method Not Allowed (405)
+    # 7. QUERY method routes (RFC / IETF safe method with body)
+    http::router_query(rt, "/search", "action_query_search")
+    http::group_query(g_api, "/data/query", "action_api_query_data")
+
+    let m_q1 = http::router_match(rt, "QUERY", "/search")
+    runner_assert_eq(r, m_q1.found, 1, "router QUERY /search found")
+    runner_assert_str_eq(r, m_q1.action, "action_query_search", "router QUERY action")
+
+    let m_q2 = http::router_match(rt, "QUERY", "/api/v1/data/query")
+    runner_assert_eq(r, m_q2.found, 1, "group QUERY /api/v1/data/query found")
+    runner_assert_str_eq(r, m_q2.action, "action_api_query_data", "group QUERY action")
+
+    # 8. Method Not Allowed (405)
     let m_405 = http::router_match(rt, "PATCH", "/about")
     runner_assert_eq(r, m_405.found, 0, "405 not found")
     runner_assert_eq(r, m_405.status, 405, "status is 405 Method Not Allowed")
     runner_assert_str_eq(r, m_405.allowed_methods[0], "GET", "allowed method is GET")
 
-    # 8. Route Not Found (404)
+    # 9. Route Not Found (404)
     let m_404 = http::router_match(rt, "GET", "/non/existent/path")
     runner_assert_eq(r, m_404.found, 0, "404 not found")
     runner_assert_eq(r, m_404.status, 404, "status is 404 Not Found")

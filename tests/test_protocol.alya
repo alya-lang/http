@@ -53,6 +53,13 @@ function main()
     runner_assert_str_eq(r, parsed_req_back.method, "GET", "roundtrip req method")
     runner_assert_str_eq(r, parsed_req_back.path, "/test", "roundtrip req path")
 
+    # 6. Parse and format QUERY request with body
+    let raw_query = "QUERY /api/items HTTP/1.1\r\nContent-Type: application/json\r\n\r\n{\"filter\":{\"active\":true}}"
+    let parsed_q = http::http_parse_request(raw_query)
+    runner_assert_str_eq(r, parsed_q.method, "QUERY", "parsed_q method is QUERY")
+    runner_assert_str_eq(r, parsed_q.path, "/api/items", "parsed_q path is /api/items")
+    runner_assert_str_eq(r, parsed_q.body, "{\"filter\":{\"active\":true}}", "parsed_q body is query payload")
+
     let failed = runner_summary(r)
     if failed > 0
         exit(1)
