@@ -22,11 +22,16 @@ function main()
     # 2. Enable middleware options
     http::server_enable_cors(s, "https://client.example.com", "GET, POST, OPTIONS", "Content-Type", 1, 7200)
     http::server_enable_logger(s, 1)
+    http::server_enable_compression(s, 128)
     let opt = s.options
     let opt_cors = opt["cors_enabled"]
     runner_assert_eq(r, opt_cors, 1, "cors enabled")
     let opt_log = opt["logger_enabled"]
     runner_assert_eq(r, opt_log, 1, "logger enabled")
+    let opt_comp = opt["compression_enabled"]
+    runner_assert_eq(r, opt_comp, 1, "compression enabled")
+    let cfg_comp = opt["compression_config"]
+    runner_assert_eq(r, cfg_comp.min_length, 128, "compression min_length set")
 
     # 3. Request processing - Match found
     let req1 = http::request_create("GET", "/api/users/99")

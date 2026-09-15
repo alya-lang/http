@@ -1,0 +1,70 @@
+# HTTP Compression Demo
+# Demonstrates server compression middleware, content negotiation,
+# pre-compressed static assets, and client decompression.
+#
+# Run with: alyac run examples/compression_demo.alya
+
+import "../src/lib.alya" as http
+
+function main()
+    say "=== alya-lang/http Compression Showcase ===\n"
+
+    # 1. Direct Payload Compression & Metrics
+    let json_payload = "{\"status\":\"ok\",\"service\":\"alya-web-api\",\"data\":[{\"id\":1,\"name\":\"Alice\"},{\"id\":2,\"name\":\"Bob\"},{\"id\":3,\"name\":\"Charlie\"}]}"
+    let original_len = len(json_payload)
+    say "1. Direct Payload Compression"
+    say "   Original JSON Body : " + str(original_len) + " bytes"
+
+    let br = http::compress(json_payload, "br")
+    let zst = http::compress(json_payload, "zstd")
+    let gz = http::compress(json_payload, "gzip")
+    let def = http::compress(json_payload, "deflate")
+
+    say "   Brotli (br)        : " + str(len(br)) + " bytes (reduced by " + str(to_int((original_len - len(br)) * 100 / original_len)) + "%)"
+    say "   Zstandard (zstd)   : " + str(len(zst)) + " bytes (reduced by " + str(to_int((original_len - len(zst)) * 100 / original_len)) + "%)"
+    say "   Gzip (gzip)        : " + str(len(gz)) + " bytes (reduced by " + str(to_int((original_len - len(gz)) * 100 / original_len)) + "%)"
+    say "   Deflate            : " + str(len(def)) + " bytes (reduced by " + str(to_int((original_len - len(def)) * 100 / original_len)) + "%)\n"
+
+    # 2. Decompression Verification
+    say "2. Client Decompression Verification"
+    let restored = http::decompress(br, "br")
+    say "   Decompressed JSON  : " + restored
+    say "   Data Integrity     : " + str(restored == json_payload) + " (100% lossless)\n"
+
+    # 3. Content Negotiation (Accept-Encoding)
+    say "3. Content Negotiation"
+    let client_encs = [
+        "gzip, deflate, br;q=0.9",
+        "gzip, deflate, zstd",
+        "deflate, gzip;q=0.5",
+        "identity",
+        "*"
+    ]
+    let i = 0
+    while i < len(client_encs)
+        let hdr = client_encs[i]
+        let chosen = http::http_negotiate_encoding(hdr)
+        if chosen == ""
+            chosen = "none (identity)"
+        end
+        say "   Accept-Encoding: \"" + hdr + "\" -> Selected: " + chosen
+        i += 1
+    end
+
+    # 4. HTTP Server Compression Configuration
+    say "\n4. HTTP Server with Compression Middleware"
+    let srv = http::server(8080)
+    # Enable compression for any response >= 64 bytes
+    http::server_enable_compression(srv, 64)
+    # Enable static file serving with automatic .br / .gz asset support
+    http::server_enable_static(srv, "/assets", "./public")
+
+    say "   Server configured on port 8080 with:"
+    say "     - Compression threshold: 64 bytes"
+    say "     - Supported algorithms : Brotli, Zstandard, Gzip, Deflate"
+    say "     - Static assets route   : /assets -> ./public (supports .br and .gz)"
+
+    say "\nAll compression features operational!"
+end
+
+main()

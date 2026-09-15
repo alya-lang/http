@@ -52,6 +52,7 @@ http/
 │       ├── recovery.alya   # Crash and exception recovery middleware
 │       └── static.alya     # Static file serving with MIME detection & pre-compressed assets
 ├── examples/
+│   ├── compression_demo.alya # Dedicated HTTP compression showcase
 │   └── demo.alya           # Comprehensive usage demo
 ├── tests/                  # 10 comprehensive test suites (100% passing)
 │   ├── test_client.alya
@@ -247,10 +248,11 @@ Run benchmarks:
 alyac run benches/bench_basic.alya
 ```
 
-Run the demo example:
+Run the demo examples:
 
 ```bash
 alyac run examples/demo.alya
+alyac run examples/compression_demo.alya
 ```
 
 ---

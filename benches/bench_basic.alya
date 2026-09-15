@@ -53,4 +53,44 @@ while m < 50000
 end
 bench_stop(runner, "Cookie create & format (50k)")
 
+# 5. HTTP Accept-Encoding negotiation
+bench_start(runner, 50000)
+let n = 0
+let accept_hdr = "gzip, deflate, br;q=0.9, zstd;q=0.8"
+while n < 50000
+    let negotiated = http::http_negotiate_encoding(accept_hdr)
+    n += 1
+end
+bench_stop(runner, "Encoding negotiation (50k)")
+
+# 6. HTTP payload compression (Gzip, Deflate, Brotli, Zstd)
+let bench_payload = "{\"status\":\"success\",\"message\":\"Alya HTTP high performance JSON response\",\"data\":[1,2,3,4,5,6,7,8,9,10]}"
+bench_start(runner, 5000)
+let p = 0
+while p < 5000
+    let gz = http::compress(bench_payload, "gzip")
+    let br = http::compress(bench_payload, "br")
+    let def = http::compress(bench_payload, "deflate")
+    let zst = http::compress(bench_payload, "zstd")
+    p += 1
+end
+bench_stop(runner, "HTTP compression Gzip/Br/Def/Zst (5k x 4 = 20k)")
+
+# 7. HTTP payload decompression (Gzip, Deflate, Brotli, Zstd)
+let gz_sample = http::compress(bench_payload, "gzip")
+let br_sample = http::compress(bench_payload, "br")
+let def_sample = http::compress(bench_payload, "deflate")
+let zst_sample = http::compress(bench_payload, "zstd")
+
+bench_start(runner, 5000)
+let q = 0
+while q < 5000
+    let r1 = http::decompress(gz_sample, "gzip")
+    let r2 = http::decompress(br_sample, "br")
+    let r3 = http::decompress(def_sample, "deflate")
+    let r4 = http::decompress(zst_sample, "zstd")
+    q += 1
+end
+bench_stop(runner, "HTTP decompression Gzip/Br/Def/Zst (5k x 4 = 20k)")
+
 bench_summary(runner)

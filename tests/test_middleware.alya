@@ -62,6 +62,21 @@ function main()
     let sc4 = res4.status_code
     runner_assert_eq(r, sc4, 403, "traversal responds with 403")
 
+    # 6. Compression middleware
+    let comp_cfg = http::compression(30)
+    let req_comp = http::request_create("GET", "/api/data")
+    http::header_set(req_comp.headers, "Accept-Encoding", "gzip, deflate, br")
+    let ctx5 = http::ctx_new(req_comp)
+    http::ctx_text(ctx5, "Alya is a modern, high-performance programming language designed for fast systems and clean web development.")
+    let comp_applied = http::mw_apply_compression(ctx5, comp_cfg)
+    runner_assert_eq(r, comp_applied, 1, "compression middleware applied")
+    let res5 = ctx5.res
+    let h5 = res5.headers
+    let enc5 = http::header_get(h5, "Content-Encoding")
+    runner_assert_str_eq(r, enc5, "br", "compression middleware picked Brotli")
+    let vary5 = http::header_get(h5, "Vary")
+    runner_assert_str_eq(r, vary5, "Accept-Encoding", "compression middleware set Vary header")
+
     let failed = runner_summary(r)
     if failed > 0
         exit(1)

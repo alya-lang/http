@@ -37,4 +37,21 @@ let parsed = http::http_parse_response(raw)
 say "Parsed Code: " + str(parsed.status_code)
 say "Parsed Body: " + parsed.body
 
+# 5. HTTP Compression & Encoding Negotiation
+let payload = "{\"status\":\"ok\",\"description\":\"Alya HTTP provides native compression supporting Brotli, Zstandard, Gzip, and Deflate for modern web APIs.\"}"
+say "\n--- HTTP Compression ---"
+say "Original Payload Size : " + str(len(payload)) + " bytes"
+
+let negotiated = http::http_negotiate_encoding("gzip, deflate, br;q=0.9")
+say "Negotiated Encoding   : " + negotiated + " (chosen based on client Accept-Encoding)"
+
+let br_comp = http::compress(payload, "br")
+say "Brotli Compressed Size: " + str(len(br_comp)) + " bytes"
+
+let gz_comp = http::compress(payload, "gzip")
+say "Gzip Compressed Size  : " + str(len(gz_comp)) + " bytes"
+
+let restored = http::decompress(br_comp, "br")
+say "Decompressed Valid?   : " + str(restored == payload)
+
 say "\nAll alya-lang/http features operational!"
