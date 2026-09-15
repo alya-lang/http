@@ -21,7 +21,7 @@ Production-ready HTTP client, server, router, compression, and middleware toolki
 
 ---
 
-## 📁 Architecture
+## 📁 Project Architecture
 
 ```
 http/

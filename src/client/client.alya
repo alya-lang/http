@@ -82,17 +82,10 @@ function client_execute(client, method, url_str, extra_headers = null, body = ""
     let parsed = url_pkg::url_parse(url_str)
     let host = parsed.host
     if host == ""
-        # Fallback to url_host for backward compatibility with older Url struct
-        host = parsed.url_host
-    end
-    if host == ""
         return HttpResponse(-1, "Invalid URL host: " + url_str, {}, "", [])
     end
 
     let scheme = parsed.scheme
-    if scheme == ""
-        scheme = parsed.url_scheme
-    end
 
     let p_str = url_pkg::url_effective_port(parsed)
     let effective_port = 0
