@@ -1,15 +1,16 @@
 [package]
 name = "http"
-version = "0.3.1"
+version = "0.4.0"
 alya-version = "0.0.16"
 entry = "src/lib.alya"
-description = "Production-ready HTTP client, server, router, and middleware toolkit for Alya"
+description = "Production-ready HTTP client, server, router, compression, and middleware toolkit for Alya"
 authors = ["Alya Language Contributors <https://github.com/alya-lang>"]
 license = "MIT"
 homepage = "https://github.com/alya-lang/alya"
 repository = "https://github.com/alya-lang/http"
-keywords = ["alya", "alya-lang", "package", "http", "https", "server", "client", "router", "middleware", "networking", "rest-api"]
+keywords = ["alya", "alya-lang", "package", "http", "https", "server", "client", "router", "middleware", "compression", "brotli", "gzip", "deflate", "zstd", "networking", "rest-api"]
 
 [dependencies]
 url = { git = "https://github.com/alya-lang/url", tag = "v0.3.0" }
 mime = { git = "https://github.com/alya-lang/mime", tag = "v0.3.0" }
+compress = { git = "https://github.com/alya-lang/compress", tag = "v0.3.0" }

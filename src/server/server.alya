@@ -9,6 +9,8 @@ import "../router/router.alya"
 import "../middleware/cors.alya"
 import "../middleware/logger.alya"
 import "../middleware/static.alya"
+import "../middleware/compress.alya"
+import "../core/compression.alya"
 import "./context.alya"
 
 # Creates a new HttpServer instance
@@ -28,7 +30,9 @@ function server_new(port = 8080, host = "0.0.0.0", router = null)
             "logger_enabled": 0,
             "static_enabled": 0,
             "static_prefix": "",
-            "static_dir": ""
+            "static_dir": "",
+            "compression_enabled": 0,
+            "compression_config": null
         }
     }
 end
@@ -51,6 +55,13 @@ function server_enable_static(server, url_prefix, local_dir)
     server.options["static_enabled"] = 1
     server.options["static_prefix"] = url_prefix
     server.options["static_dir"] = local_dir
+    return server
+end
+
+# Enables response compression middleware on the server (Brotli, Zstd, Gzip, Deflate)
+function server_enable_compression(server, min_length = 256)
+    server.options["compression_enabled"] = 1
+    server.options["compression_config"] = compression_config_new(min_length)
     return server
 end
 
@@ -171,6 +182,11 @@ end
 function server_send(server, ctx)
     if ctx == null or ctx.client_sock < 0
         return 0
+    end
+
+    # Apply compression if enabled
+    if server != null and server.options["compression_enabled"] == 1
+        mw_apply_compression(ctx, server.options["compression_config"])
     end
 
     # Log request if logger is enabled

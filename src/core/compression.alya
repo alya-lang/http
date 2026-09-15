@@ -1,0 +1,105 @@
+# HTTP Compression and Decompression Engine
+# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "compress" as compress_pkg
+import "../types.alya"
+import "./headers.alya"
+
+# Internal substring search helper
+function _comp_str_find(s, target, start_idx = 0)
+    let slen = len(s)
+    let tlen = len(target)
+    if tlen == 0
+        return start_idx
+    end
+    let i = start_idx
+    while i + tlen <= slen
+        if substring(s, i, tlen) == target
+            return i
+        end
+        i += 1
+    end
+    return -1
+end
+
+# Compresses a payload string with the given algorithm ("gzip", "br"/"brotli", "deflate", "zstd")
+# Returns compressed byte list, or null if encoding is unsupported
+function http_compress(data_str, encoding = "gzip")
+    let enc = lower(trim(encoding))
+    if enc == "gzip"
+        return compress_pkg::gzip_str(data_str)
+    elif enc == "br" or enc == "brotli"
+        return compress_pkg::brotli_str(data_str)
+    elif enc == "deflate"
+        return compress_pkg::deflate_str(data_str)
+    elif enc == "zstd"
+        return compress_pkg::zstd_str(data_str)
+    elif enc == "identity"
+        return compress_pkg::bytes_from_string(data_str)
+    else
+        return null
+    end
+end
+
+# Decompresses a byte list with the given algorithm into a UTF-8 string
+# Returns decompressed string, or null if encoding is unsupported
+function http_decompress(bytes_list, encoding = "gzip")
+    let enc = lower(trim(encoding))
+    if enc == "gzip"
+        return compress_pkg::gunzip_str(bytes_list)
+    elif enc == "br" or enc == "brotli"
+        return compress_pkg::unbrotli_str(bytes_list)
+    elif enc == "deflate"
+        return compress_pkg::inflate_str(bytes_list)
+    elif enc == "zstd"
+        return compress_pkg::unzstd_str(bytes_list)
+    elif enc == "identity"
+        return compress_pkg::bytes_to_string(bytes_list)
+    else
+        return null
+    end
+end
+
+# Checks if an encoding is supported by the compression engine
+function http_is_encoding_supported(enc)
+    let e = lower(trim(enc))
+    return e == "gzip" or e == "br" or e == "brotli" or e == "deflate" or e == "zstd" or e == "identity"
+end
+
+# Selects best matching compression encoding from an Accept-Encoding header string
+# In order of web compression efficiency: br > zstd > gzip > deflate
+# Returns selected encoding name, or "" if none matched
+function http_negotiate_encoding(accept_encoding_header)
+    if accept_encoding_header == null or len(accept_encoding_header) == 0
+        return ""
+    end
+
+    let h = lower(accept_encoding_header)
+
+    # Prefer Brotli (highest compression ratio for web text)
+    if _comp_str_find(h, "br", 0) >= 0
+        return "br"
+    end
+
+    # Modern Zstandard
+    if _comp_str_find(h, "zstd", 0) >= 0
+        return "zstd"
+    end
+
+    # Universal Gzip standard
+    if _comp_str_find(h, "gzip", 0) >= 0
+        return "gzip"
+    end
+
+    # Standard Deflate
+    if _comp_str_find(h, "deflate", 0) >= 0
+        return "deflate"
+    end
+
+    # Wildcard match
+    if _comp_str_find(h, "*", 0) >= 0
+        return "gzip"
+    end
+
+    return ""
+end

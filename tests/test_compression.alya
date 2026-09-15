@@ -1,0 +1,158 @@
+# Test suite for HTTP Compression Engine and Middleware
+# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "std/test"
+import "std/fs"
+import "../src/lib.alya" as http
+
+function main()
+    test_suite("HTTP Compression Tests")
+    let r = runner_new()
+
+    # 1. Encoding negotiation priorities (Brotli > Zstd > Gzip > Deflate)
+    let enc_br = http::http_negotiate_encoding("gzip, deflate, br;q=0.9")
+    runner_assert_str_eq(r, enc_br, "br", "negotiate selects br first")
+
+    let enc_zstd = http::http_negotiate_encoding("gzip, deflate, zstd")
+    runner_assert_str_eq(r, enc_zstd, "zstd", "negotiate selects zstd over gzip")
+
+    let enc_gz = http::http_negotiate_encoding("gzip, deflate")
+    runner_assert_str_eq(r, enc_gz, "gzip", "negotiate selects gzip over deflate")
+
+    let enc_def = http::http_negotiate_encoding("deflate")
+    runner_assert_str_eq(r, enc_def, "deflate", "negotiate selects deflate")
+
+    let enc_star = http::http_negotiate_encoding("*")
+    runner_assert_str_eq(r, enc_star, "gzip", "negotiate wildcard selects gzip")
+
+    let enc_empty = http::http_negotiate_encoding("")
+    runner_assert_str_eq(r, enc_empty, "", "negotiate empty header returns empty")
+
+    # 2. Supported encodings verification
+    runner_assert_eq(r, http::http_is_encoding_supported("gzip"), 1, "gzip is supported")
+    runner_assert_eq(r, http::http_is_encoding_supported("br"), 1, "br is supported")
+    runner_assert_eq(r, http::http_is_encoding_supported("brotli"), 1, "brotli alias is supported")
+    runner_assert_eq(r, http::http_is_encoding_supported("deflate"), 1, "deflate is supported")
+    runner_assert_eq(r, http::http_is_encoding_supported("zstd"), 1, "zstd is supported")
+    runner_assert_eq(r, http::http_is_encoding_supported("unknown_algo"), 0, "unknown algo not supported")
+
+    # 3. Roundtrip compression/decompression across all 4 algorithms
+    let test_payload = "Alya is a modern, high-performance programming language designed for systems and ecosystem tooling. Fast, safe, simple."
+
+    # 3a. Gzip roundtrip
+    let gz_comp = http::compress(test_payload, "gzip")
+    runner_assert_true(r, len(gz_comp) > 0, "gzip compression produces output")
+    let gz_restored = http::decompress(gz_comp, "gzip")
+    runner_assert_str_eq(r, gz_restored, test_payload, "gzip decompress restores text")
+
+    # 3b. Brotli roundtrip
+    let br_comp = http::compress(test_payload, "br")
+    runner_assert_true(r, len(br_comp) > 0, "brotli compression produces output")
+    let br_restored = http::decompress(br_comp, "br")
+    runner_assert_str_eq(r, br_restored, test_payload, "brotli decompress restores text")
+
+    # 3c. Deflate roundtrip
+    let def_comp = http::compress(test_payload, "deflate")
+    runner_assert_true(r, len(def_comp) > 0, "deflate compression produces output")
+    let def_restored = http::decompress(def_comp, "deflate")
+    runner_assert_str_eq(r, def_restored, test_payload, "deflate decompress restores text")
+
+    # 3d. Zstd roundtrip
+    let zstd_comp = http::compress(test_payload, "zstd")
+    runner_assert_true(r, len(zstd_comp) > 0, "zstd compression produces output")
+    let zstd_restored = http::decompress(zstd_comp, "zstd")
+    runner_assert_str_eq(r, zstd_restored, test_payload, "zstd decompress restores text")
+
+    # 4. Compression middleware threshold & headers
+    let cfg = http::compression(50)
+
+    # 4a. Below min_length threshold -> skipped
+    let req_small = http::request_create("GET", "/small")
+    http::header_set(req_small.headers, "Accept-Encoding", "gzip, br")
+    let ctx_small = http::ctx_new(req_small)
+    http::ctx_text(ctx_small, "Too short")
+    let applied_small = http::mw_apply_compression(ctx_small, cfg)
+    runner_assert_eq(r, applied_small, 0, "small response below threshold not compressed")
+
+    # 4b. Above min_length threshold with Accept-Encoding -> compressed
+    let req_large = http::request_create("GET", "/large")
+    http::header_set(req_large.headers, "Accept-Encoding", "gzip, deflate, br")
+    let ctx_large = http::ctx_new(req_large)
+    http::ctx_text(ctx_large, test_payload)
+    let applied_large = http::mw_apply_compression(ctx_large, cfg)
+    runner_assert_eq(r, applied_large, 1, "large response compressed")
+
+    let res_large = ctx_large.res
+    let h_large = res_large.headers
+    let v_enc = http::header_get(h_large, "Content-Encoding")
+    runner_assert_str_eq(r, v_enc, "br", "middleware selected best encoding br")
+    let v_vary = http::header_get(h_large, "Vary")
+    runner_assert_str_eq(r, v_vary, "Accept-Encoding", "middleware added Vary header")
+    let v_len = http::header_get(h_large, "Content-Length")
+    runner_assert_true(r, to_int(v_len) > 0, "middleware updated Content-Length")
+
+    # Context data contains compressed bytes
+    let d = ctx_large.data
+    runner_assert_true(r, has(d, "compressed_body"), "ctx.data contains compressed_body")
+    let comp_bytes = d["compressed_body"]
+    let roundtrip_decomp = http::http_decompress(comp_bytes, "br")
+    runner_assert_str_eq(r, roundtrip_decomp, test_payload, "compressed_body decompresses correctly")
+
+    # 4c. Response already compressed -> skipped
+    let applied_again = http::mw_apply_compression(ctx_large, cfg)
+    runner_assert_eq(r, applied_again, 0, "already encoded response not re-compressed")
+
+    # 5. Pre-compressed static file serving (.br and .gz)
+    let tmp_test_dir = "temp_static_comp_test"
+    fs_mkdir(tmp_test_dir)
+    let file_plain = tmp_test_dir + "/bundle.js"
+    let file_br = tmp_test_dir + "/bundle.js.br"
+    let file_gz = tmp_test_dir + "/bundle.js.gz"
+
+    write_file(file_plain, "console.log('original asset uncompressed');")
+    write_file(file_br, "BR_COMPRESSED_DATA")
+    write_file(file_gz, "GZ_COMPRESSED_DATA")
+
+    # Client requests with Accept-Encoding: br
+    let req_static_br = http::request_create("GET", "/static/bundle.js")
+    http::header_set(req_static_br.headers, "Accept-Encoding", "gzip, br")
+    let ctx_static_br = http::ctx_new(req_static_br)
+    let served_br = http::mw_serve_static(ctx_static_br, "/static", tmp_test_dir)
+    runner_assert_eq(r, served_br, 1, "static precompressed br served")
+    let res_s_br = ctx_static_br.res
+    let enc_s_br = http::header_get(res_s_br.headers, "Content-Encoding")
+    runner_assert_str_eq(r, enc_s_br, "br", "static precompressed header Content-Encoding: br")
+    runner_assert_str_eq(r, res_s_br.body, "BR_COMPRESSED_DATA", "static served .br file content")
+
+    # Client requests with Accept-Encoding: gzip (no br)
+    let req_static_gz = http::request_create("GET", "/static/bundle.js")
+    http::header_set(req_static_gz.headers, "Accept-Encoding", "gzip")
+    let ctx_static_gz = http::ctx_new(req_static_gz)
+    let served_gz = http::mw_serve_static(ctx_static_gz, "/static", tmp_test_dir)
+    runner_assert_eq(r, served_gz, 1, "static precompressed gz served")
+    let res_s_gz = ctx_static_gz.res
+    let enc_s_gz = http::header_get(res_s_gz.headers, "Content-Encoding")
+    runner_assert_str_eq(r, enc_s_gz, "gzip", "static precompressed header Content-Encoding: gzip")
+    runner_assert_str_eq(r, res_s_gz.body, "GZ_COMPRESSED_DATA", "static served .gz file content")
+
+    # Clean up temporary static test files
+    remove_file(file_plain)
+    remove_file(file_br)
+    remove_file(file_gz)
+    fs_rmdir(tmp_test_dir)
+
+    # 6. Server configuration with compression
+    let s = http::server(8080)
+    http::server_enable_compression(s, 512)
+    let s_opt = s.options
+    runner_assert_eq(r, s_opt["compression_enabled"], 1, "server options compression_enabled")
+    let s_cfg = s_opt["compression_config"]
+    runner_assert_eq(r, s_cfg.min_length, 512, "server options min_length 512")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

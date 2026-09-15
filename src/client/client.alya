@@ -35,7 +35,7 @@ function _client_curl_bridge(method, url_str, headers, body, timeout_ms, follow_
         sec_timeout = 10
     end
 
-    let cmd = "curl -s -i -m " + str(sec_timeout) + " -X " + method + " "
+    let cmd = "curl -s -i --compressed -m " + str(sec_timeout) + " -X " + method + " "
 
     if follow_redirects == 1
         cmd = cmd + "-L --max-redirs " + str(max_redirects) + " "

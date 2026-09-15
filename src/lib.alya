@@ -13,6 +13,8 @@ import "./middleware/cors.alya"
 import "./middleware/logger.alya"
 import "./middleware/recovery.alya"
 import "./middleware/static.alya"
+import "./middleware/compress.alya"
+import "./core/compression.alya"
 import "./server/context.alya"
 import "./server/server.alya"
 import "./client/client.alya"
@@ -45,4 +47,19 @@ end
 # Creates a new CORS config
 function cors(origin = "*", methods = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH, QUERY", headers = "Content-Type, Authorization, X-Requested-With")
     return cors_config_new(origin, methods, headers)
+end
+
+# Creates a new Compression config
+function compression(min_length = 256)
+    return compression_config_new(min_length)
+end
+
+# Compresses payload string with given algorithm ("gzip", "br", "deflate", "zstd")
+function compress(data_str, encoding = "gzip")
+    return http_compress(data_str, encoding)
+end
+
+# Decompresses byte list with given algorithm into string
+function decompress(bytes_list, encoding = "gzip")
+    return http_decompress(bytes_list, encoding)
 end
