@@ -56,30 +56,30 @@ let STATUS_GATEWAY_TIMEOUT = 504
 let STATUS_HTTP_VERSION_NOT_SUPPORTED = 505
 
 # Status getter functions for namespaced module imports
-function status_ok() return 200 end
-function status_created() return 201 end
-function status_accepted() return 202 end
-function status_no_content() return 204 end
-function status_moved_permanently() return 301 end
-function status_found() return 302 end
-function status_not_modified() return 304 end
-function status_temporary_redirect() return 307 end
-function status_permanent_redirect() return 308 end
-function status_bad_request() return 400 end
-function status_unauthorized() return 401 end
-function status_forbidden() return 403 end
-function status_not_found() return 404 end
-function status_method_not_allowed() return 405 end
-function status_conflict() return 409 end
-function status_too_many_requests() return 429 end
-function status_internal_server_error() return 500 end
-function status_not_implemented() return 501 end
-function status_bad_gateway() return 502 end
-function status_service_unavailable() return 503 end
-function status_gateway_timeout() return 504 end
+pub function status_ok() return 200 end
+pub function status_created() return 201 end
+pub function status_accepted() return 202 end
+pub function status_no_content() return 204 end
+pub function status_moved_permanently() return 301 end
+pub function status_found() return 302 end
+pub function status_not_modified() return 304 end
+pub function status_temporary_redirect() return 307 end
+pub function status_permanent_redirect() return 308 end
+pub function status_bad_request() return 400 end
+pub function status_unauthorized() return 401 end
+pub function status_forbidden() return 403 end
+pub function status_not_found() return 404 end
+pub function status_method_not_allowed() return 405 end
+pub function status_conflict() return 409 end
+pub function status_too_many_requests() return 429 end
+pub function status_internal_server_error() return 500 end
+pub function status_not_implemented() return 501 end
+pub function status_bad_gateway() return 502 end
+pub function status_service_unavailable() return 503 end
+pub function status_gateway_timeout() return 504 end
 
 # Returns standard HTTP status text for a given status code
-function http_status_text(code)
+pub function http_status_text(code)
     when code
         is 100 then return "Continue"
         is 101 then return "Switching Protocols"
@@ -130,31 +130,31 @@ function http_status_text(code)
 end
 
 # Checks if status code is informational (1xx)
-function http_is_informational(code)
+pub function http_is_informational(code)
     return code >= 100 and code < 200
 end
 
 # Checks if status code is successful (2xx)
-function http_is_success(code)
+pub function http_is_success(code)
     return code >= 200 and code < 300
 end
 
 # Checks if status code is redirection (3xx)
-function http_is_redirect(code)
+pub function http_is_redirect(code)
     return code >= 300 and code < 400
 end
 
 # Checks if status code is client error (4xx)
-function http_is_client_error(code)
+pub function http_is_client_error(code)
     return code >= 400 and code < 500
 end
 
 # Checks if status code is server error (5xx)
-function http_is_server_error(code)
+pub function http_is_server_error(code)
     return code >= 500 and code < 600
 end
 
 # Checks if status code represents an error (4xx, 5xx, or negative)
-function http_is_error(code)
+pub function http_is_error(code)
     return code >= 400 or code < 0
 end

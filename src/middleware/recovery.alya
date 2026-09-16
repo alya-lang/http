@@ -5,8 +5,8 @@ import "../types.alya"
 import "../core/headers.alya"
 
 # Formats a safe JSON error response and sets 500 status code
-function mw_apply_recovery(ctx, err_message = "Internal Server Error")
-    if ctx == null or ctx.res == null
+pub function mw_apply_recovery(ctx, err_message = "Internal Server Error")
+    if ctx is null or ctx.res is null
         return null
     end
 

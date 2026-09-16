@@ -6,7 +6,7 @@ import "../types.alya"
 import "./headers.alya"
 
 # Internal substring search helper
-function _comp_str_find(s, target, start_idx = 0)
+pub function _comp_str_find(s, target, start_idx = 0)
     let slen = len(s)
     let tlen = len(target)
     if tlen == 0
@@ -24,7 +24,7 @@ end
 
 # Compresses a payload string with the given algorithm ("gzip", "br"/"brotli", "deflate", "zstd")
 # Returns compressed byte list, or null if encoding is unsupported
-function http_compress(data_str, encoding = "gzip")
+pub function http_compress(data_str, encoding = "gzip")
     let enc = lower(trim(encoding))
     if enc == "gzip"
         return compress_pkg::gzip_str(data_str)
@@ -43,7 +43,7 @@ end
 
 # Decompresses a byte list with the given algorithm into a UTF-8 string
 # Returns decompressed string, or null if encoding is unsupported
-function http_decompress(bytes_list, encoding = "gzip")
+pub function http_decompress(bytes_list, encoding = "gzip")
     let enc = lower(trim(encoding))
     if enc == "gzip"
         return compress_pkg::gunzip_str(bytes_list)
@@ -61,7 +61,7 @@ function http_decompress(bytes_list, encoding = "gzip")
 end
 
 # Checks if an encoding is supported by the compression engine
-function http_is_encoding_supported(enc)
+pub function http_is_encoding_supported(enc)
     let e = lower(trim(enc))
     return e == "gzip" or e == "br" or e == "brotli" or e == "deflate" or e == "zstd" or e == "identity"
 end
@@ -69,8 +69,8 @@ end
 # Selects best matching compression encoding from an Accept-Encoding header string
 # In order of web compression efficiency: br > zstd > gzip > deflate
 # Returns selected encoding name, or "" if none matched
-function http_negotiate_encoding(accept_encoding_header)
-    if accept_encoding_header == null or len(accept_encoding_header) == 0
+pub function http_negotiate_encoding(accept_encoding_header)
+    if accept_encoding_header is null or len(accept_encoding_header) == 0
         return ""
     end
 

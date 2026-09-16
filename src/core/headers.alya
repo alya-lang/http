@@ -2,8 +2,8 @@
 # Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
 # Capitalizes an individual word or segment (e.g. "content" -> "Content")
-function _cap_word(word)
-    if word == null or len(word) == 0
+pub function _cap_word(word)
+    if word is null or len(word) == 0
         return ""
     end
     let first = upper(substring(word, 0, 1))
@@ -15,8 +15,8 @@ function _cap_word(word)
 end
 
 # Converts a header key to canonical Title-Case (e.g. "content-type" -> "Content-Type")
-function header_canonical(key)
-    if key == null or len(key) == 0
+pub function header_canonical(key)
+    if key is null or len(key) == 0
         return ""
     end
     let k = lower(trim(key))
@@ -44,8 +44,8 @@ function header_canonical(key)
 end
 
 # Gets header value by case-insensitive key. Returns default_val if missing.
-function header_get(headers, key, default_val = "")
-    if headers == null or key == null
+pub function header_get(headers, key, default_val = "")
+    if headers is null or key is null
         return default_val
     end
     let k = lower(trim(key))
@@ -65,8 +65,8 @@ function header_get(headers, key, default_val = "")
 end
 
 # Sets header value by case-insensitive key.
-function header_set(headers, key, val)
-    if headers == null or key == null
+pub function header_set(headers, key, val)
+    if headers is null or key is null
         return null
     end
     let k = lower(trim(key))
@@ -75,8 +75,8 @@ function header_set(headers, key, val)
 end
 
 # Checks whether a header key exists (case-insensitive).
-function header_has(headers, key)
-    if headers == null or key == null
+pub function header_has(headers, key)
+    if headers is null or key is null
         return 0
     end
     let k = lower(trim(key))
@@ -96,8 +96,8 @@ function header_has(headers, key)
 end
 
 # Returns a new header map with the specified key removed.
-function header_remove(headers, key)
-    if headers == null
+pub function header_remove(headers, key)
+    if headers is null
         return {}
     end
     let target = lower(trim(key))
@@ -115,8 +115,8 @@ function header_remove(headers, key)
 end
 
 # Serializes headers map to HTTP/1.1 wire format with CRLF endings.
-function headers_format(headers)
-    if headers == null
+pub function headers_format(headers)
+    if headers is null
         return ""
     end
     let out = ""
@@ -125,7 +125,7 @@ function headers_format(headers)
     while i < len(ks)
         let k = ks[i]
         let val = headers[k]
-        if val != null
+        if val is not null
             out = out + header_canonical(k) + ": " + str(val) + "\r\n"
         end
         i += 1

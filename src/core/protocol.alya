@@ -8,7 +8,7 @@ import "./cookies.alya"
 import "url" as url_pkg
 
 # Internal helper to find substring index
-function _proto_find(s, target, start_idx = 0)
+pub function _proto_find(s, target, start_idx = 0)
     let slen = len(s)
     let tlen = len(target)
     if tlen == 0
@@ -25,8 +25,8 @@ function _proto_find(s, target, start_idx = 0)
 end
 
 # Parses a raw HTTP/1.1 request wire string into an HttpRequest struct
-function http_parse_request(raw, remote_addr = "")
-    if raw == null or len(raw) == 0
+pub function http_parse_request(raw, remote_addr = "")
+    if raw is null or len(raw) == 0
         return request_create("GET", "/", "", {}, "", remote_addr)
     end
 
@@ -116,8 +116,8 @@ function http_parse_request(raw, remote_addr = "")
 end
 
 # Parses a raw HTTP/1.1 response wire string into an HttpResponse struct
-function http_parse_response(raw)
-    if raw == null or len(raw) == 0
+pub function http_parse_response(raw)
+    if raw is null or len(raw) == 0
         return HttpResponse(-1, "Empty response", {}, "", [])
     end
 
@@ -194,13 +194,13 @@ function http_parse_response(raw)
 end
 
 # Serializes an HttpResponse struct to HTTP/1.1 wire string format
-function http_format_response(res)
-    if res == null
+pub function http_format_response(res)
+    if res is null
         return "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n"
     end
 
     let status_text = res.status_text
-    if status_text == null or status_text == ""
+    if status_text is null or status_text == ""
         status_text = http_status_text(res.status_code)
     end
 
@@ -208,19 +208,19 @@ function http_format_response(res)
 
     # Ensure Content-Length and Content-Type defaults
     let headers = res.headers
-    if headers == null
+    if headers is null
         headers = {}
     end
 
     if !has(headers, "content-length")
         let blen = 0
-        if res.body != null
+        if res.body is not null
             blen = len(res.body)
         end
         headers["content-length"] = str(blen)
     end
 
-    if !has(headers, "content-type") and res.body != null and len(res.body) > 0
+    if !has(headers, "content-type") and res.body is not null and len(res.body) > 0
         headers["content-type"] = "text/plain; charset=utf-8"
     end
 
@@ -232,7 +232,7 @@ function http_format_response(res)
     wire = wire + headers_format(headers)
 
     # Format cookies as Set-Cookie headers
-    if res.cookies != null
+    if res.cookies is not null
         let ci = 0
         while ci < len(res.cookies)
             let c = res.cookies[ci]
@@ -245,7 +245,7 @@ function http_format_response(res)
     wire = wire + "\r\n"
 
     # Append body
-    if res.body != null and len(res.body) > 0
+    if res.body is not null and len(res.body) > 0
         wire = wire + res.body
     end
 
@@ -253,13 +253,13 @@ function http_format_response(res)
 end
 
 # Serializes an HttpRequest struct to HTTP/1.1 wire string format
-function http_format_request(req)
-    if req == null
+pub function http_format_request(req)
+    if req is null
         return "GET / HTTP/1.1\r\n\r\n"
     end
 
     let target = req.path
-    if req.query != null and req.query != ""
+    if req.query is not null and req.query != ""
         target = target + "?" + req.query
     end
     if target == ""
@@ -269,7 +269,7 @@ function http_format_request(req)
     let wire = req.method + " " + target + " HTTP/1.1\r\n"
 
     let headers = req.headers
-    if headers == null
+    if headers is null
         headers = {}
     end
 
@@ -281,14 +281,14 @@ function http_format_request(req)
         headers["connection"] = "close"
     end
 
-    if req.body != null and len(req.body) > 0 and !has(headers, "content-length")
+    if req.body is not null and len(req.body) > 0 and !has(headers, "content-length")
         headers["content-length"] = str(len(req.body))
     end
 
     wire = wire + headers_format(headers)
     wire = wire + "\r\n"
 
-    if req.body != null and len(req.body) > 0
+    if req.body is not null and len(req.body) > 0
         wire = wire + req.body
     end
 

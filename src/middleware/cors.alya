@@ -4,7 +4,7 @@
 import "../types.alya"
 import "../core/headers.alya"
 
-struct CorsConfig
+pub struct CorsConfig
     allow_origin
     allow_methods
     allow_headers
@@ -13,7 +13,7 @@ struct CorsConfig
 end
 
 # Creates a new CorsConfig struct with sensible defaults
-function cors_config_new(origin = "*", methods = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH, QUERY", headers = "Content-Type, Authorization, X-Requested-With", credentials = 0, max_age = 86400)
+pub function cors_config_new(origin = "*", methods = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH, QUERY", headers = "Content-Type, Authorization, X-Requested-With", credentials = 0, max_age = 86400)
     return CorsConfig {
         allow_origin: origin,
         allow_methods: methods,
@@ -25,12 +25,12 @@ end
 
 # Applies CORS headers to HttpContext and handles preflight OPTIONS requests
 # Returns 1 if request was preflight and aborted, 0 if request should continue
-function mw_apply_cors(ctx, config = null)
-    if ctx == null
+pub function mw_apply_cors(ctx, config = null)
+    if ctx is null
         return 0
     end
 
-    if config == null
+    if config is null
         config = cors_config_new()
     end
 
@@ -48,7 +48,7 @@ function mw_apply_cors(ctx, config = null)
     end
 
     # Handle preflight OPTIONS request
-    if ctx.req != null and ctx.req.method == "OPTIONS"
+    if ctx.req is not null and ctx.req.method == "OPTIONS"
         res.status_code = 204
         res.status_text = "No Content"
         res.body = ""

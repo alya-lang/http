@@ -9,7 +9,7 @@ import "../core/headers.alya"
 import "../core/protocol.alya"
 
 # Creates a new HttpClient instance
-function client_new(timeout_ms = 10000, follow_redirects = 1, max_redirects = 5)
+pub function client_new(timeout_ms = 10000, follow_redirects = 1, max_redirects = 5)
     return HttpClient {
         timeout_ms: timeout_ms,
         headers: {},
@@ -19,15 +19,15 @@ function client_new(timeout_ms = 10000, follow_redirects = 1, max_redirects = 5)
 end
 
 # Sets a default header on the client
-function client_set_header(client, key, val)
-    if client != null
+pub function client_set_header(client, key, val)
+    if client is not null
         header_set(client.headers, key, val)
     end
     return client
 end
 
 # Internal HTTPS bridge via system curl
-function _client_curl_bridge(method, url_str, headers, body, timeout_ms, follow_redirects, max_redirects)
+pub function _client_curl_bridge(method, url_str, headers, body, timeout_ms, follow_redirects, max_redirects)
     let tmp_out = "temp_alya_http_out_" + str(clock_ms()) + ".tmp"
     let tmp_body = "temp_alya_http_body_" + str(clock_ms()) + ".tmp"
     let sec_timeout = to_int(timeout_ms / 1000)
@@ -41,7 +41,7 @@ function _client_curl_bridge(method, url_str, headers, body, timeout_ms, follow_
         cmd = cmd + "-L --max-redirs " + str(max_redirects) + " "
     end
 
-    if headers != null
+    if headers is not null
         let hkeys = headers.keys()
         let ki = 0
         while ki < len(hkeys)
@@ -78,7 +78,7 @@ function _client_curl_bridge(method, url_str, headers, body, timeout_ms, follow_
 end
 
 # Performs an HTTP request using raw TCP socket or HTTPS bridge
-function client_execute(client, method, url_str, extra_headers = null, body = "")
+pub function client_execute(client, method, url_str, extra_headers = null, body = "")
     let parsed = url_pkg::url_parse(url_str)
     let host = parsed.host
     if host == ""
@@ -102,7 +102,7 @@ function client_execute(client, method, url_str, extra_headers = null, body = ""
 
     # Merge client default headers and extra headers
     let req_headers = {}
-    if client != null and client.headers != null
+    if client is not null and client.headers is not null
         let ckeys = client.headers.keys()
         let ci = 0
         while ci < len(ckeys)
@@ -111,7 +111,7 @@ function client_execute(client, method, url_str, extra_headers = null, body = ""
             ci += 1
         end
     end
-    if extra_headers != null
+    if extra_headers is not null
         let ekeys = extra_headers.keys()
         let ei = 0
         while ei < len(ekeys)
@@ -124,7 +124,7 @@ function client_execute(client, method, url_str, extra_headers = null, body = ""
     let timeout_ms = 10000
     let follow = 1
     let max_redirs = 5
-    if client != null
+    if client is not null
         timeout_ms = client.timeout_ms
         follow = client.follow_redirects
         max_redirs = client.max_redirects

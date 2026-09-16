@@ -4,30 +4,30 @@
 import "../types.alya"
 
 # Creates a new HttpCookie struct
-function cookie_new(name, value, path = "/", max_age = -1, http_only = 0, secure = 0, same_site = "Lax")
+pub function cookie_new(name, value, path = "/", max_age = -1, http_only = 0, secure = 0, same_site = "Lax")
     return cookie_create(name, value, path, max_age, http_only, secure, same_site)
 end
 
 # Formats an HttpCookie struct into a valid Set-Cookie header value
-function cookie_format(c)
-    if c == null
+pub function cookie_format(c)
+    if c is null
         return ""
     end
     let res = c.name + "=" + c.value
 
-    if c.path != null and c.path != ""
+    if c.path is not null and c.path != ""
         res = res + "; Path=" + c.path
     end
 
-    if c.domain != null and c.domain != ""
+    if c.domain is not null and c.domain != ""
         res = res + "; Domain=" + c.domain
     end
 
-    if c.max_age != null and c.max_age >= 0
+    if c.max_age is not null and c.max_age >= 0
         res = res + "; Max-Age=" + str(c.max_age)
     end
 
-    if c.expires != null and c.expires != ""
+    if c.expires is not null and c.expires != ""
         res = res + "; Expires=" + c.expires
     end
 
@@ -39,7 +39,7 @@ function cookie_format(c)
         res = res + "; Secure"
     end
 
-    if c.same_site != null and c.same_site != ""
+    if c.same_site is not null and c.same_site != ""
         res = res + "; SameSite=" + c.same_site
     end
 
@@ -47,7 +47,7 @@ function cookie_format(c)
 end
 
 # Internal helper to find substring
-function _cookie_find(s, target, start_idx = 0)
+pub function _cookie_find(s, target, start_idx = 0)
     let slen = len(s)
     let tlen = len(target)
     if tlen == 0
@@ -64,8 +64,8 @@ function _cookie_find(s, target, start_idx = 0)
 end
 
 # Parses incoming 'Cookie' header into a Map of name -> value
-function cookie_parse(raw)
-    if raw == null or len(raw) == 0
+pub function cookie_parse(raw)
+    if raw is null or len(raw) == 0
         return {}
     end
 

@@ -2,7 +2,7 @@
 # Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
 # Represents an incoming or outgoing HTTP Cookie
-struct HttpCookie
+pub struct HttpCookie
     name
     value
     path
@@ -15,7 +15,7 @@ struct HttpCookie
 end
 
 # Represents an HTTP request
-struct HttpRequest
+pub struct HttpRequest
     method
     url
     path
@@ -29,7 +29,7 @@ struct HttpRequest
 end
 
 # Represents an HTTP response
-struct HttpResponse
+pub struct HttpResponse
     status_code
     status_text
     headers
@@ -38,7 +38,7 @@ struct HttpResponse
 end
 
 # Represents a route match result from Router
-struct RouteMatch
+pub struct RouteMatch
     found
     action
     route
@@ -48,7 +48,7 @@ struct RouteMatch
 end
 
 # Represents the request/response lifecycle context
-struct HttpContext
+pub struct HttpContext
     req
     res
     client_sock
@@ -57,7 +57,7 @@ struct HttpContext
 end
 
 # Represents an HTTP Route definition
-struct HttpRoute
+pub struct HttpRoute
     method
     action
     pattern
@@ -65,13 +65,13 @@ struct HttpRoute
 end
 
 # Represents the HTTP Router
-struct HttpRouter
+pub struct HttpRouter
     routes
     not_found_action
 end
 
 # Represents the HTTP Server instance
-struct HttpServer
+pub struct HttpServer
     port
     host
     server_sock
@@ -81,7 +81,7 @@ struct HttpServer
 end
 
 # Represents the HTTP Client configuration
-struct HttpClient
+pub struct HttpClient
     timeout_ms
     headers
     follow_redirects
@@ -89,7 +89,7 @@ struct HttpClient
 end
 
 # Factory for HttpCookie
-function cookie_create(name, value, path = "/", max_age = -1, http_only = 0, secure = 0, same_site = "Lax")
+pub function cookie_create(name, value, path = "/", max_age = -1, http_only = 0, secure = 0, same_site = "Lax")
     return HttpCookie {
         name: name,
         value: value,
@@ -104,17 +104,17 @@ function cookie_create(name, value, path = "/", max_age = -1, http_only = 0, sec
 end
 
 # Factory for HttpRequest
-function request_create(method, path, query = "", headers = null, body = "", remote_addr = "", params = null, cookies = null, query_params = null)
-    if headers == null
+pub function request_create(method, path, query = "", headers = null, body = "", remote_addr = "", params = null, cookies = null, query_params = null)
+    if headers is null
         headers = {}
     end
-    if params == null
+    if params is null
         params = {}
     end
-    if cookies == null
+    if cookies is null
         cookies = {}
     end
-    if query_params == null
+    if query_params is null
         query_params = {}
     end
     let full_url = path
@@ -136,8 +136,8 @@ function request_create(method, path, query = "", headers = null, body = "", rem
 end
 
 # Factory for HttpResponse
-function response_create(status_code = 200, status_text = "OK", headers = null, body = "")
-    if headers == null
+pub function response_create(status_code = 200, status_text = "OK", headers = null, body = "")
+    if headers is null
         headers = {}
     end
     return HttpResponse {
@@ -150,8 +150,8 @@ function response_create(status_code = 200, status_text = "OK", headers = null, 
 end
 
 # Factory for HttpContext
-function context_create(req, res = null, client_sock = -1)
-    if res == null
+pub function context_create(req, res = null, client_sock = -1)
+    if res is null
         res = response_create(200, "OK")
     end
     return HttpContext {

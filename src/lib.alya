@@ -25,41 +25,41 @@ import "./client/methods.alya"
 # ═══════════════════════════════════════════════════════════════
 
 # Creates an HTTP server on port and host
-function server(port = 8080, host = "0.0.0.0", router_inst = null)
+pub function server(port = 8080, host = "0.0.0.0", router_inst = null)
     return server_new(port, host, router_inst)
 end
 
 # Creates a new HTTP router
-function router(not_found_action = "not_found")
+pub function router(not_found_action = "not_found")
     return router_new(not_found_action)
 end
 
 # Creates a new HTTP client
-function client(timeout_ms = 10000, follow_redirects = 1, max_redirects = 5)
+pub function client(timeout_ms = 10000, follow_redirects = 1, max_redirects = 5)
     return client_new(timeout_ms, follow_redirects, max_redirects)
 end
 
 # Creates a new HTTP cookie
-function cookie(name, value, path = "/", max_age = -1, http_only = 0, secure = 0, same_site = "Lax")
+pub function cookie(name, value, path = "/", max_age = -1, http_only = 0, secure = 0, same_site = "Lax")
     return cookie_new(name, value, path, max_age, http_only, secure, same_site)
 end
 
 # Creates a new CORS config
-function cors(origin = "*", methods = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH, QUERY", headers = "Content-Type, Authorization, X-Requested-With")
+pub function cors(origin = "*", methods = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH, QUERY", headers = "Content-Type, Authorization, X-Requested-With")
     return cors_config_new(origin, methods, headers)
 end
 
 # Creates a new Compression config
-function compression(min_length = 256)
+pub function compression(min_length = 256)
     return compression_config_new(min_length)
 end
 
 # Compresses payload string with given algorithm ("gzip", "br", "deflate", "zstd")
-function compress(data_str, encoding = "gzip")
+pub function compress(data_str, encoding = "gzip")
     return http_compress(data_str, encoding)
 end
 
 # Decompresses byte list with given algorithm into string
-function decompress(bytes_list, encoding = "gzip")
+pub function decompress(bytes_list, encoding = "gzip")
     return http_decompress(bytes_list, encoding)
 end

@@ -4,7 +4,7 @@
 import "../types.alya"
 
 # Formats a structured log message string for an HTTP request
-function mw_format_log(method, path, status, latency_ms = -1, remote_addr = "")
+pub function mw_format_log(method, path, status, latency_ms = -1, remote_addr = "")
     let msg = "[HTTP] " + method + " " + path + " " + str(status)
     if latency_ms >= 0
         msg = msg + " - " + str(latency_ms) + "ms"
@@ -16,15 +16,15 @@ function mw_format_log(method, path, status, latency_ms = -1, remote_addr = "")
 end
 
 # Logs an HttpContext request and response lifecycle
-function mw_log_context(ctx, latency_ms = -1)
-    if ctx == null or ctx.req == null
+pub function mw_log_context(ctx, latency_ms = -1)
+    if ctx is null or ctx.req is null
         return null
     end
 
     let method = ctx.req.method
     let path = ctx.req.path
     let status = 200
-    if ctx.res != null
+    if ctx.res is not null
         let res = ctx.res
         status = res.status_code
     end

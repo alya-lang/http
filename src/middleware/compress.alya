@@ -6,13 +6,13 @@ import "../core/headers.alya"
 import "../core/compression.alya"
 
 # Configuration for response compression middleware
-struct CompressionConfig
+pub struct CompressionConfig
     min_length
     encodings
 end
 
 # Creates a new CompressionConfig struct with sensible defaults
-function compression_config_new(min_length = 256)
+pub function compression_config_new(min_length = 256)
     return CompressionConfig {
         min_length: min_length,
         encodings: ["br", "zstd", "gzip", "deflate"]
@@ -21,15 +21,15 @@ end
 
 # Applies HTTP compression to HttpContext response based on request Accept-Encoding
 # Returns 1 if compression was applied, 0 otherwise
-function mw_apply_compression(ctx, config = null)
-    if ctx == null or ctx.res == null or ctx.req == null
+pub function mw_apply_compression(ctx, config = null)
+    if ctx is null or ctx.res is null or ctx.req is null
         return 0
     end
 
     let res = ctx.res
     let req = ctx.req
 
-    if res.body == null or len(res.body) == 0
+    if res.body is null or len(res.body) == 0
         return 0
     end
 
@@ -38,7 +38,7 @@ function mw_apply_compression(ctx, config = null)
         return 0
     end
 
-    if config == null
+    if config is null
         config = compression_config_new()
     end
 
@@ -58,7 +58,7 @@ function mw_apply_compression(ctx, config = null)
     end
 
     let comp_bytes = http_compress(res.body, chosen_enc)
-    if comp_bytes == null or len(comp_bytes) == 0
+    if comp_bytes is null or len(comp_bytes) == 0
         return 0
     end
 
@@ -69,7 +69,7 @@ function mw_apply_compression(ctx, config = null)
 
     # Store raw compressed bytes in context data dictionary
     let ctx_data = ctx.data
-    if ctx_data != null
+    if ctx_data is not null
         ctx_data["compressed_body"] = comp_bytes
         ctx_data["compression_encoding"] = chosen_enc
     end

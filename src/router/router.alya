@@ -5,7 +5,7 @@ import "../types.alya"
 import "./route.alya"
 
 # Creates a new HttpRouter instance
-function router_new(not_found_action = "not_found")
+pub function router_new(not_found_action = "not_found")
     return HttpRouter {
         routes: [],
         not_found_action: not_found_action
@@ -13,8 +13,8 @@ function router_new(not_found_action = "not_found")
 end
 
 # Adds a new route rule to the router
-function router_add(r, method, pattern, action)
-    if r == null
+pub function router_add(r, method, pattern, action)
+    if r is null
         return null
     end
     let route = route_new(method, pattern, action)
@@ -23,53 +23,53 @@ function router_add(r, method, pattern, action)
 end
 
 # Registers a GET route
-function router_get(r, pattern, action)
+pub function router_get(r, pattern, action)
     return router_add(r, "GET", pattern, action)
 end
 
 # Registers a POST route
-function router_post(r, pattern, action)
+pub function router_post(r, pattern, action)
     return router_add(r, "POST", pattern, action)
 end
 
 # Registers a PUT route
-function router_put(r, pattern, action)
+pub function router_put(r, pattern, action)
     return router_add(r, "PUT", pattern, action)
 end
 
 # Registers a DELETE route
-function router_delete(r, pattern, action)
+pub function router_delete(r, pattern, action)
     return router_add(r, "DELETE", pattern, action)
 end
 
 # Registers a PATCH route
-function router_patch(r, pattern, action)
+pub function router_patch(r, pattern, action)
     return router_add(r, "PATCH", pattern, action)
 end
 
 # Registers a HEAD route
-function router_head(r, pattern, action)
+pub function router_head(r, pattern, action)
     return router_add(r, "HEAD", pattern, action)
 end
 
 # Registers an OPTIONS route
-function router_options(r, pattern, action)
+pub function router_options(r, pattern, action)
     return router_add(r, "OPTIONS", pattern, action)
 end
 
 # Registers a QUERY route (IETF safe method with request body)
-function router_query(r, pattern, action)
+pub function router_query(r, pattern, action)
     return router_add(r, "QUERY", pattern, action)
 end
 
 # Registers a route matching ANY HTTP method
-function router_any(r, pattern, action)
+pub function router_any(r, pattern, action)
     return router_add(r, "ANY", pattern, action)
 end
 
 # Joins prefix and path pattern cleanly (e.g. "/api" + "/users/:id" -> "/api/users/:id")
-function _router_join_prefix(prefix, pattern)
-    if prefix == null or prefix == "" or prefix == "/"
+pub function _router_join_prefix(prefix, pattern)
+    if prefix is null or prefix == "" or prefix == "/"
         return pattern
     end
     let p = prefix
@@ -87,13 +87,13 @@ function _router_join_prefix(prefix, pattern)
 end
 
 # Adds a route under a group prefix
-function router_group_add(r, prefix, method, pattern, action)
+pub function router_group_add(r, prefix, method, pattern, action)
     let full_pattern = _router_join_prefix(prefix, pattern)
     return router_add(r, method, full_pattern, action)
 end
 
 # Helper to check if array contains item
-function _arr_has(arr, item)
+pub function _arr_has(arr, item)
     let i = 0
     while i < len(arr)
         if arr[i] == item
@@ -106,8 +106,8 @@ end
 
 # Matches a request method and path against registered routes
 # Returns a RouteMatch struct
-function router_match(r, method, path)
-    if r == null
+pub function router_match(r, method, path)
+    if r is null
         return RouteMatch(0, "not_found", "", {}, 404, [])
     end
 
