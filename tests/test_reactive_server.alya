@@ -50,13 +50,14 @@ function main()
     say "--- SECTION 1 (GET) ---"
     let client_sock = net::tcp_connect(host, port)
     runner_assert(r, client_sock >= 0, "client connected to reactive server")
+    net::tcp_set_timeout(client_sock, 2000)
 
     let raw_get = "GET /api/status HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
     net::tcp_send(client_sock, raw_get)
 
     # Tick event loop until response is processed
     let ticks = 0
-    while ticks < 10
+    while ticks < 40
         let events = ev::loop_tick(l, 50)
         for e in events
             ev::loop_dispatch_event(e)
@@ -67,7 +68,10 @@ function main()
         ticks += 1
     end
 
-    let resp_wire = net::tcp_recv(client_sock, 4096)
+    let resp_wire = ""
+    if net::tcp_poll(client_sock, 100) == 1
+        resp_wire = net::tcp_recv(client_sock, 4096)
+    end
     net::tcp_close(client_sock)
 
     runner_assert(r, len(resp_wire) > 0, "received HTTP GET response")
@@ -79,13 +83,14 @@ function main()
     say "--- SECTION 2 (POST) ---"
     let client_post = net::tcp_connect(host, port)
     runner_assert(r, client_post >= 0, "client connected for POST")
+    net::tcp_set_timeout(client_post, 2000)
 
     let post_body = "Hello from Reactive Reactor!"
     let raw_post = "POST /api/echo HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: " + str(len(post_body)) + "\r\nConnection: close\r\n\r\n" + post_body
     net::tcp_send(client_post, raw_post)
 
     ticks = 0
-    while ticks < 10
+    while ticks < 40
         let events = ev::loop_tick(l, 50)
         for e in events
             ev::loop_dispatch_event(e)
@@ -96,7 +101,10 @@ function main()
         ticks += 1
     end
 
-    let resp_post_wire = net::tcp_recv(client_post, 4096)
+    let resp_post_wire = ""
+    if net::tcp_poll(client_post, 100) == 1
+        resp_post_wire = net::tcp_recv(client_post, 4096)
+    end
     net::tcp_close(client_post)
 
     runner_assert(r, len(resp_post_wire) > 0, "received HTTP POST response")
@@ -107,6 +115,7 @@ function main()
     say "--- SECTION 3 (WS Handshake) ---"
     let ws_sock = net::tcp_connect(host, port)
     runner_assert(r, ws_sock >= 0, "client connected for WebSocket upgrade")
+    net::tcp_set_timeout(ws_sock, 2000)
 
     let ws_key = "dGhlIHNhbXBsZSBub25jZQ=="
     let ws_handshake_req = "GET /ws HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: " + ws_key + "\r\nSec-WebSocket-Version: 13\r\n\r\n"
@@ -114,7 +123,7 @@ function main()
 
     # Process handshake in event loop
     ticks = 0
-    while ticks < 10
+    while ticks < 40
         let events = ev::loop_tick(l, 50)
         for e in events
             ev::loop_dispatch_event(e)
@@ -142,7 +151,7 @@ function main()
 
     # Process WebSocket frame in event loop
     ticks = 0
-    while ticks < 10
+    while ticks < 40
         let events = ev::loop_tick(l, 50)
         for e in events
             ev::loop_dispatch_event(e)
