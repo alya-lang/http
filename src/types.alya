@@ -49,8 +49,8 @@ end
 
 # Represents the request/response lifecycle context
 pub struct HttpContext
-    req
-    res
+    req: HttpRequest
+    res: HttpResponse
     client_sock
     aborted
     data
