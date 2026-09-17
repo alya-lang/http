@@ -1,0 +1,92 @@
+# Test WebSocket RFC 6455 Frame Encoding, Parsing, and Roundtrip
+import "std/test"
+import "../src/websocket/frame.alya"
+
+function main()
+    test_suite("WebSocket Frame Tests")
+    let r = runner_new()
+
+    # 1. Short unmasked text frame
+    let msg1 = "Hello, WebSocket!"
+    let wire1 = ws_encode_text(msg1, 0)
+    let parsed1 = ws_frame_parse(wire1, 0)
+    let f1 = parsed1[0]
+    let consumed1 = parsed1[1]
+
+    runner_assert_eq(r, f1 is not null, 1, "frame 1 parsed successfully")
+    runner_assert_eq(r, f1.fin, 1, "frame 1 is final")
+    runner_assert_eq(r, f1.opcode, WebSocketOpCode.Text, "frame 1 is text opcode")
+    runner_assert_eq(r, f1.masked, 0, "frame 1 is unmasked")
+    runner_assert_str_eq(r, f1.payload, msg1, "frame 1 payload matches")
+    runner_assert_eq(r, consumed1, len(wire1), "frame 1 bytes consumed match wire length")
+
+    # 2. Masked text frame (client -> server)
+    let msg2 = "Secure masked client payload"
+    let mask_key = [10, 20, 30, 40]
+    let wire2 = ws_encode_text(msg2, 1, mask_key)
+    let parsed2 = ws_frame_parse(wire2, 0)
+    let f2 = parsed2[0]
+
+    runner_assert_eq(r, f2 is not null, 1, "masked frame parsed")
+    runner_assert_eq(r, f2.masked, 1, "frame is masked")
+    runner_assert_str_eq(r, f2.payload, msg2, "masked frame payload unmasked correctly")
+
+    # 3. Ping and Pong control frames
+    let ping_wire = ws_encode_ping("heartbeat")
+    let ping_parsed = ws_frame_parse(ping_wire, 0)
+    let f_ping = ping_parsed[0]
+    runner_assert_eq(r, f_ping.is_ping(), 1, "ping frame detected")
+    runner_assert_str_eq(r, f_ping.payload, "heartbeat", "ping payload matches")
+
+    let pong_wire = ws_encode_pong("heartbeat")
+    let pong_parsed = ws_frame_parse(pong_wire, 0)
+    let f_pong = pong_parsed[0]
+    runner_assert_eq(r, f_pong.is_pong(), 1, "pong frame detected")
+    runner_assert_str_eq(r, f_pong.payload, "heartbeat", "pong payload matches")
+
+    # 4. Close control frame
+    let close_wire = ws_encode_close(1000, "Normal Closure")
+    let close_parsed = ws_frame_parse(close_wire, 0)
+    let f_close = close_parsed[0]
+    runner_assert_eq(r, f_close.is_close(), 1, "close frame detected")
+    runner_assert_eq(r, f_close.is_control(), 1, "is_control returns 1")
+
+    # 5. Medium payload (16-bit extended length >= 126 bytes)
+    let medium_data = ""
+    let i = 0
+    while i < 300
+        medium_data = medium_data + "A"
+        i += 1
+    end
+    let medium_wire = ws_encode_text(medium_data, 0)
+    let medium_parsed = ws_frame_parse(medium_wire, 0)
+    let f_med = medium_parsed[0]
+    runner_assert_eq(r, f_med is not null, 1, "medium frame parsed")
+    runner_assert_eq(r, f_med.len, 300, "medium frame len is 300")
+    runner_assert_str_eq(r, f_med.payload, medium_data, "medium payload roundtrip matches")
+
+    # 6. Partial frame buffer (incomplete)
+    let truncated_wire = substring(wire1, 0, len(wire1) - 4)
+    let partial_res = ws_frame_parse(truncated_wire, 0)
+    runner_assert_eq(r, partial_res[0] is null, 1, "incomplete frame returns null")
+    runner_assert_eq(r, partial_res[1], 0, "incomplete frame consumes 0 bytes")
+
+    # 7. Consecutive frames in a single buffer
+    let combined_buffer = wire1 + ping_wire
+    let parse_step1 = ws_frame_parse(combined_buffer, 0)
+    let c1 = parse_step1[1]
+    runner_assert_eq(r, c1, len(wire1), "first frame consumed len(wire1)")
+
+    let parse_step2 = ws_frame_parse(combined_buffer, c1)
+    let f_step2 = parse_step2[0]
+    let c2 = parse_step2[1]
+    runner_assert_eq(r, f_step2.is_ping(), 1, "second frame is ping")
+    runner_assert_eq(r, c2, len(ping_wire), "second frame consumed len(ping_wire)")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

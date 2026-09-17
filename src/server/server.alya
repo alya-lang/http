@@ -33,7 +33,9 @@ pub function server_new(port = 8080, host = "0.0.0.0", router = null)
             "static_dir": "",
             "compression_enabled": 0,
             "compression_config": null
-        }
+        },
+        loop: null,
+        tcp_server: null
     }
 end
 

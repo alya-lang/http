@@ -78,6 +78,8 @@ pub struct HttpServer
     running
     router
     options
+    loop
+    tcp_server
 end
 
 # Represents the HTTP Client configuration

@@ -11,10 +11,11 @@ Production-ready HTTP client, server, router, compression, and middleware toolki
 
 ## 🌟 Features
 
-- ⚡ **High Performance**: Optimized protocol parsing, header serialization, and fast routing. Micro-benchmarks demonstrate >100,000 ops in hundreds of milliseconds.
+- ⚡ **High Performance & Reactive I/O**: Fast protocol parsing and routing. Seamlessly binds to `event::EventLoop` for non-blocking reactive concurrency (`reactive_server`), handling thousands of concurrent connections with zero thread overhead.
+- 🔌 **RFC 6455 WebSockets**: Full-duplex WebSocket server and client connections. Automatic handshake negotiation (`101 Switching Protocols`), RFC test-vector verified framing (text, binary, ping, pong, close), and callback-driven protocol drivers (`ws_on_message`, `ws_send`, etc.).
 - 🗜️ **Web Compression Toolkit**: Native integration with `compress` supporting **Brotli (`br`)**, **Zstandard (`zstd`)**, **Gzip (`gzip`)**, and **Deflate (`deflate`)**. Automatic `Accept-Encoding` negotiation, server response compression middleware, pre-compressed static asset serving (`.br` and `.gz`), and client decompression.
 - 🌐 **Full HTTP Client**: Supports GET, POST, PUT, DELETE, PATCH, HEAD, and OPTIONS with custom headers, query params, timeout handling, and automatic redirect following.
-- 🚀 **HTTP Server & Context**: Built on low-level TCP sockets (`std/net`), offering intuitive request context (`HttpContext`), JSON responses, text responses, file serving, and status helpers.
+- 🚀 **HTTP Server & Context**: Built on low-level TCP sockets (`std/net`) or non-blocking event loops, offering intuitive request context (`HttpContext`), JSON responses, text responses, file serving, and status helpers.
 - 🛣️ **Parametric Router & Route Groups**: Fast URL pattern matching with wildcard (`*path`) and named parameters (`:id`), plus subrouter groups with shared path prefixes and middleware chains.
 - 🛡️ **Extensible Middleware**: Out-of-the-box middleware for Compression (`mw_apply_compression`), CORS (`cors_middleware`), request logging (`logger_middleware`), panic recovery (`recovery_middleware`), and static file serving (`static_middleware`).
 - 🍪 **Cookie & Header Management**: RFC-compliant Cookie serialization/parsing (`Set-Cookie` and `Cookie` headers) and case-insensitive HTTP header operations.
@@ -41,7 +42,12 @@ http/
 │   │   └── group.alya      # Route grouping with prefix and sub-middlewares
 │   ├── server/
 │   │   ├── context.alya    # HttpContext request/response lifecycle helpers
-│   │   └── server.alya     # TCP socket server, request loop, and connection handler
+│   │   ├── server.alya     # TCP socket server, request loop, and connection handler
+│   │   └── reactive.alya   # Event-loop driven non-blocking reactive HTTP server adapter
+│   ├── websocket/
+│   │   ├── handshake.alya  # RFC 6455 WebSocket upgrade & SHA-1 handshake accept token
+│   │   ├── frame.alya      # RFC 6455 frame serializer, deserializer, and masking
+│   │   └── connection.alya # High-level WebSocket bidirectional connection driver
 │   ├── client/
 │   │   ├── client.alya     # HttpClient implementation with socket IO and redirect loop
 │   │   └── methods.alya    # Convenience functions (http_get, http_post, etc.)
@@ -54,7 +60,7 @@ http/
 ├── examples/
 │   ├── compression_demo.alya # Dedicated HTTP compression showcase
 │   └── demo.alya           # Comprehensive usage demo
-├── tests/                  # 10 comprehensive test suites (100% passing)
+├── tests/                  # 14 comprehensive test suites (100% passing)
 │   ├── test_client.alya
 │   ├── test_compression.alya
 │   ├── test_context.alya
@@ -62,9 +68,13 @@ http/
 │   ├── test_headers.alya
 │   ├── test_middleware.alya
 │   ├── test_protocol.alya
+│   ├── test_reactive_server.alya
 │   ├── test_router.alya
 │   ├── test_server.alya
-│   └── test_status.alya
+│   ├── test_status.alya
+│   ├── test_websocket_conn.alya
+│   ├── test_websocket_frame.alya
+│   └── test_websocket_handshake.alya
 └── benches/
     └── bench_basic.alya    # Performance micro-benchmarks
 ```
@@ -223,11 +233,34 @@ main()
 | `router_query(r, pattern, handler)` | `pattern: string, handler: string` | Registers a QUERY route handler |
 | `router_group_add(r, prefix, ...)` | `prefix: string, ...` | Registers a route under a group prefix |
 
+### Reactive Server API
+
+| Function | Parameters | Description |
+|---|---|---|
+| `reactive_server(loop, port, host, router, on_req, on_ws)` | `loop: EventLoop, ...` | Spawns an event-loop bound reactive HTTP/WS server |
+| `server_use_event_loop(srv, loop, on_req, on_ws)` | `srv: HttpServer, loop: EventLoop` | Binds an existing `HttpServer` to a non-blocking reactor |
+| `server_close_reactive(srv)` | `srv: HttpServer` | Unregisters server watchers and closes all client streams |
+
+### WebSocket API (RFC 6455)
+
+| Function | Parameters | Description |
+|---|---|---|
+| `websocket(stream, is_server)` | `stream: TcpStream, is_server: int` | Wraps a non-blocking stream into a `WebSocketConnection` |
+| `ws_send(ws, text)` | `ws: WebSocketConnection, text: string` | Sends a UTF-8 text message frame |
+| `ws_send_binary(ws, data)` | `ws: WebSocketConnection, data: string` | Sends a binary message frame |
+| `ws_ping(ws, data)` | `ws: WebSocketConnection, data: string` | Sends an RFC 6455 ping heartbeat frame |
+| `ws_pong(ws, data)` | `ws: WebSocketConnection, data: string` | Sends an RFC 6455 pong heartbeat frame |
+| `ws_close(ws, code, reason)` | `ws: WebSocketConnection, code: int, reason: string` | Performs clean close handshake |
+| `ws_on_message(ws, callback)` | `ws: WebSocketConnection, cb: fn(ws, msg, is_bin)` | Registers message handler callback |
+| `ws_on_close(ws, callback)` | `ws: WebSocketConnection, cb: fn(ws, code, reason)` | Registers connection close callback |
+| `ws_on_ping(ws, callback)` | `ws: WebSocketConnection, cb: fn(ws, data)` | Registers incoming ping callback |
+| `ws_on_pong(ws, callback)` | `ws: WebSocketConnection, cb: fn(ws, data)` | Registers incoming pong callback |
+
 ---
 
 ## 🧪 Running Tests & Benchmarks
 
-Run all 10 test suites using `alyac`:
+Run all 14 test suites using `alyac`:
 
 ```bash
 alyac test

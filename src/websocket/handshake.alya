@@ -1,0 +1,229 @@
+# RFC 6455 WebSocket Handshake & Cryptographic Key Resolution
+# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "std/str"
+import "../types.alya"
+import "../core/headers.alya"
+
+# RFC 6455 Magic GUID constant
+pub const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+# ═══════════════════════════════════════════════════════════════
+# Internal Cryptographic Helpers (SHA-1 & Base64)
+# ═══════════════════════════════════════════════════════════════
+
+function _ws_rotl32(x, n)
+    return bit_and(bit_or(bit_shl(x, n), bit_shr(x, 32 - n)), 4294967295)
+end
+
+function _ws_sha1_bytes(data_bytes)
+    let msg_len = len(data_bytes)
+    let total_bits = msg_len * 8
+
+    let bytes = []
+    let i = 0
+    while i < msg_len
+        bytes.push(data_bytes[i])
+        i += 1
+    end
+
+    bytes.push(128) # 0x80
+
+    while len(bytes) % 64 != 56
+        bytes.push(0)
+    end
+
+    bytes.push(bit_and(bit_shr(total_bits, 56), 255))
+    bytes.push(bit_and(bit_shr(total_bits, 48), 255))
+    bytes.push(bit_and(bit_shr(total_bits, 40), 255))
+    bytes.push(bit_and(bit_shr(total_bits, 32), 255))
+    bytes.push(bit_and(bit_shr(total_bits, 24), 255))
+    bytes.push(bit_and(bit_shr(total_bits, 16), 255))
+    bytes.push(bit_and(bit_shr(total_bits, 8), 255))
+    bytes.push(bit_and(total_bits, 255))
+
+    let h0 = 1732584193 # 0x67452301
+    let h1 = 4023233417 # 0xefcdab89
+    let h2 = 2562383102 # 0x98badcfe
+    let h3 = 271733878  # 0x10325476
+    let h4 = 3285377520 # 0xc3d2e1f0
+
+    let num_blocks = len(bytes) / 64
+    let block_idx = 0
+
+    while block_idx < num_blocks
+        let offset = block_idx * 64
+        let w = []
+
+        let t = 0
+        while t < 16
+            let p = offset + t * 4
+            let w0 = bytes[p]
+            let w1 = bytes[p + 1]
+            let w2 = bytes[p + 2]
+            let w3 = bytes[p + 3]
+            let word = bit_or(bit_shl(w0, 24), bit_or(bit_shl(w1, 16), bit_or(bit_shl(w2, 8), w3)))
+            w.push(word)
+            t += 1
+        end
+
+        while t < 80
+            let xor_val = bit_xor(w[t - 3], bit_xor(w[t - 8], bit_xor(w[t - 14], w[t - 16])))
+            w.push(_ws_rotl32(xor_val, 1))
+            t += 1
+        end
+
+        let a = h0
+        let b = h1
+        let c = h2
+        let d = h3
+        let e = h4
+
+        t = 0
+        while t < 80
+            let f = 0
+            let k = 0
+            if t < 20
+                f = bit_or(bit_and(b, c), bit_and(bit_not(b), d))
+                k = 1518500249 # 0x5a827999
+            elif t < 40
+                f = bit_xor(b, bit_xor(c, d))
+                k = 1859775393 # 0x6ed9eba1
+            elif t < 60
+                f = bit_or(bit_and(b, c), bit_or(bit_and(b, d), bit_and(c, d)))
+                k = 2400959708 # 0x8f1bbcdc
+            else
+                f = bit_xor(b, bit_xor(c, d))
+                k = 3395469782 # 0xca62c1d6
+            end
+
+            let temp = bit_and(_ws_rotl32(a, 5) + f + e + k + w[t], 4294967295)
+            e = d
+            d = c
+            c = _ws_rotl32(b, 30)
+            b = a
+            a = temp
+            t += 1
+        end
+
+        h0 = bit_and(h0 + a, 4294967295)
+        h1 = bit_and(h1 + b, 4294967295)
+        h2 = bit_and(h2 + c, 4294967295)
+        h3 = bit_and(h3 + d, 4294967295)
+        h4 = bit_and(h4 + e, 4294967295)
+
+        block_idx += 1
+    end
+
+    let digest = []
+    let h_vals = [h0, h1, h2, h3, h4]
+    for val in h_vals
+        digest.push(bit_and(bit_shr(val, 24), 255))
+        digest.push(bit_and(bit_shr(val, 16), 255))
+        digest.push(bit_and(bit_shr(val, 8), 255))
+        digest.push(bit_and(val, 255))
+    end
+    return digest
+end
+
+function _ws_base64_encode(bytes)
+    let b64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    let blen = len(bytes)
+    let res = ""
+    let i = 0
+
+    while i < blen
+        let b0 = bytes[i]
+        let b1 = 0
+        let b2 = 0
+        let has_b1 = 0
+        let has_b2 = 0
+
+        if i + 1 < blen
+            b1 = bytes[i + 1]
+            has_b1 = 1
+        end
+        if i + 2 < blen
+            b2 = bytes[i + 2]
+            has_b2 = 1
+        end
+
+        let idx0 = bit_and(bit_shr(b0, 2), 63)
+        let idx1 = bit_and(bit_or(bit_shl(bit_and(b0, 3), 4), bit_shr(b1, 4)), 63)
+        let idx2 = bit_and(bit_or(bit_shl(bit_and(b1, 15), 2), bit_shr(b2, 6)), 63)
+        let idx3 = bit_and(b2, 63)
+
+        res = res + char_at(b64_chars, idx0) + char_at(b64_chars, idx1)
+        if has_b1 == 1
+            res = res + char_at(b64_chars, idx2)
+        else
+            res = res + "="
+        end
+        if has_b2 == 1
+            res = res + char_at(b64_chars, idx3)
+        else
+            res = res + "="
+        end
+        i += 3
+    end
+    return res
+end
+
+# ═══════════════════════════════════════════════════════════════
+# Public WebSocket Handshake API
+# ═══════════════════════════════════════════════════════════════
+
+# Computes the RFC 6455 Sec-WebSocket-Accept token from the client key
+pub function ws_accept_key(sec_key)
+    if sec_key is null or len(sec_key) == 0
+        return ""
+    end
+    let full = sec_key + WS_GUID
+    let full_bytes = []
+    let i = 0
+    let flen = len(full)
+    while i < flen
+        full_bytes.push(ord(char_at(full, i)))
+        i += 1
+    end
+    let sha1_digest = _ws_sha1_bytes(full_bytes)
+    return _ws_base64_encode(sha1_digest)
+end
+
+# Determines whether the given HttpRequest is a valid WebSocket upgrade request
+pub function ws_is_upgrade_request(req)
+    if req is null or req.headers is null
+        return 0
+    end
+    let upgrade = header_get(req.headers, "Upgrade")
+    if upgrade is null or lower(upgrade) != "websocket"
+        return 0
+    end
+    let conn = header_get(req.headers, "Connection")
+    if conn is null or index_of(lower(conn), "upgrade") < 0
+        return 0
+    end
+    let sec_key = header_get(req.headers, "Sec-WebSocket-Key")
+    if sec_key is null or len(sec_key) == 0
+        return 0
+    end
+    return 1
+end
+
+# Builds the HTTP 101 Switching Protocols handshake wire response
+pub function ws_handshake_response(req, subprotocol = "")
+    let sec_key = header_get(req.headers, "Sec-WebSocket-Key")
+    let accept_key = ws_accept_key(sec_key)
+
+    let wire = "HTTP/1.1 101 Switching Protocols\r\n"
+    wire = wire + "Upgrade: websocket\r\n"
+    wire = wire + "Connection: Upgrade\r\n"
+    wire = wire + "Sec-WebSocket-Accept: " + accept_key + "\r\n"
+
+    if subprotocol != "" and len(subprotocol) > 0
+        wire = wire + "Sec-WebSocket-Protocol: " + subprotocol + "\r\n"
+    end
+
+    wire = wire + "\r\n"
+    return wire
+end

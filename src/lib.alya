@@ -19,6 +19,10 @@ import "./server/context.alya"
 import "./server/server.alya"
 import "./client/client.alya"
 import "./client/methods.alya"
+import "./websocket/handshake.alya"
+import "./websocket/frame.alya"
+import "./websocket/connection.alya"
+import "./server/reactive.alya"
 
 # ═══════════════════════════════════════════════════════════════
 # High-Level Idiomatic API
@@ -62,4 +66,15 @@ end
 # Decompresses byte list with given algorithm into string
 pub function decompress(bytes_list, encoding = "gzip")
     return http_decompress(bytes_list, encoding)
+end
+
+# Creates and binds an event-driven reactive HTTP/WebSocket server to an EventLoop
+pub function reactive_server(loop, port = 8080, host = "0.0.0.0", router_inst = null, on_request = null, on_websocket = null)
+    let s = server_new(port, host, router_inst)
+    return server_use_event_loop(s, loop, on_request, on_websocket)
+end
+
+# Creates a WebSocket connection wrapper over an event::TcpStream
+pub function websocket(stream, is_server = 1)
+    return ws_connection_from_stream(stream, is_server)
 end

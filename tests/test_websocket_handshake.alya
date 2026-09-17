@@ -1,0 +1,45 @@
+# Test WebSocket RFC 6455 Handshake & Key Calculation
+import "std/test"
+import "../src/types.alya"
+import "../src/core/headers.alya"
+import "../src/websocket/handshake.alya"
+
+function main()
+    test_suite("WebSocket Handshake Tests")
+    let r = runner_new()
+
+    # 1. RFC 6455 standard test vector
+    # Client key: dGhlIHNhbXBsZSBub25jZQ==
+    # Expected accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+    let key = "dGhlIHNhbXBsZSBub25jZQ=="
+    let accept = ws_accept_key(key)
+    runner_assert_str_eq(r, accept, "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=", "RFC 6455 test vector accept key")
+
+    # 2. Upgrade request detection
+    let req1 = request_create("GET", "/ws")
+    header_set(req1.headers, "Upgrade", "websocket")
+    header_set(req1.headers, "Connection", "Upgrade")
+    header_set(req1.headers, "Sec-WebSocket-Key", key)
+    runner_assert_eq(r, ws_is_upgrade_request(req1), 1, "valid upgrade request")
+
+    # Invalid upgrade requests
+    let req2 = request_create("GET", "/api")
+    runner_assert_eq(r, ws_is_upgrade_request(req2), 0, "regular request is not upgrade")
+
+    let req3 = request_create("GET", "/ws")
+    header_set(req3.headers, "Upgrade", "websocket")
+    runner_assert_eq(r, ws_is_upgrade_request(req3), 0, "missing connection header is not upgrade")
+
+    # 3. Handshake response generation
+    let resp = ws_handshake_response(req1)
+    runner_assert_eq(r, index_of(resp, "HTTP/1.1 101 Switching Protocols") >= 0, 1, "status 101")
+    runner_assert_eq(r, index_of(resp, "Upgrade: websocket") >= 0, 1, "upgrade header")
+    runner_assert_eq(r, index_of(resp, "Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") >= 0, 1, "accept header")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

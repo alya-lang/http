@@ -1,0 +1,356 @@
+# RFC 6455 WebSocket Frame Definition, Framing, and Streaming Parser
+# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "std/str"
+
+# RFC 6455 WebSocket OpCodes
+pub enum WebSocketOpCode
+    Continuation = 0
+    Text = 1
+    Binary = 2
+    Close = 8
+    Ping = 9
+    Pong = 10
+end
+
+# Represents a parsed or pending RFC 6455 WebSocket Frame
+pub struct WebSocketFrame
+    fin
+    opcode
+    masked
+    payload
+    mask_key
+    len
+end
+
+# ═══════════════════════════════════════════════════════════════
+# Frame Inspector Functions
+# ═══════════════════════════════════════════════════════════════
+
+pub function ws_frame_is_final(frame)
+    if frame is null
+        return 0
+    end
+    return frame.fin == 1
+end
+
+pub function ws_frame_is_text(frame)
+    if frame is null
+        return 0
+    end
+    return frame.opcode == WebSocketOpCode.Text
+end
+
+pub function ws_frame_is_binary(frame)
+    if frame is null
+        return 0
+    end
+    return frame.opcode == WebSocketOpCode.Binary
+end
+
+pub function ws_frame_is_close(frame)
+    if frame is null
+        return 0
+    end
+    return frame.opcode == WebSocketOpCode.Close
+end
+
+pub function ws_frame_is_ping(frame)
+    if frame is null
+        return 0
+    end
+    return frame.opcode == WebSocketOpCode.Ping
+end
+
+pub function ws_frame_is_pong(frame)
+    if frame is null
+        return 0
+    end
+    return frame.opcode == WebSocketOpCode.Pong
+end
+
+pub function ws_frame_is_control(frame)
+    if frame is null
+        return 0
+    end
+    return frame.opcode >= 8
+end
+
+# Standalone aliases for dynamic method calls
+pub function is_final(frame)
+    return ws_frame_is_final(frame)
+end
+
+pub function is_text(frame)
+    return ws_frame_is_text(frame)
+end
+
+pub function is_binary(frame)
+    return ws_frame_is_binary(frame)
+end
+
+pub function is_close(frame)
+    return ws_frame_is_close(frame)
+end
+
+pub function is_ping(frame)
+    return ws_frame_is_ping(frame)
+end
+
+pub function is_pong(frame)
+    return ws_frame_is_pong(frame)
+end
+
+pub function is_control(frame)
+    return ws_frame_is_control(frame)
+end
+
+pub function WebSocketFrame.is_final(self)
+    return ws_frame_is_final(self)
+end
+
+pub function WebSocketFrame.is_text(self)
+    return ws_frame_is_text(self)
+end
+
+pub function WebSocketFrame.is_binary(self)
+    return ws_frame_is_binary(self)
+end
+
+pub function WebSocketFrame.is_close(self)
+    return ws_frame_is_close(self)
+end
+
+pub function WebSocketFrame.is_ping(self)
+    return ws_frame_is_ping(self)
+end
+
+pub function WebSocketFrame.is_pong(self)
+    return ws_frame_is_pong(self)
+end
+
+pub function WebSocketFrame.is_control(self)
+    return ws_frame_is_control(self)
+end
+
+# ═══════════════════════════════════════════════════════════════
+# Frame Construction & Serialization
+# ═══════════════════════════════════════════════════════════════
+
+# Creates an unencoded WebSocketFrame struct
+pub function ws_frame_create(opcode, payload = "", is_final = 1, masked = 0, mask_key = null)
+    let plen = 0
+    if payload is not null
+        plen = len(payload)
+    else
+        payload = ""
+    end
+    return WebSocketFrame {
+        fin: is_final,
+        opcode: opcode,
+        masked: masked,
+        payload: payload,
+        mask_key: mask_key,
+        len: plen
+    }
+end
+
+# Serializes an RFC 6455 WebSocket frame into wire bytes
+pub function ws_frame_encode(opcode, payload = "", is_final = 1, mask = 0, mask_key = null)
+    if payload is null
+        payload = ""
+    end
+    let plen = len(payload)
+
+    let b0 = bit_and(opcode, 15)
+    if is_final == 1
+        b0 = bit_or(b0, 128)
+    end
+
+    let mask_bit = 0
+    if mask == 1
+        mask_bit = 128
+        if mask_key is null or len(mask_key) < 4
+            mask_key = [53, 102, 169, 212]
+        end
+    end
+
+    let header_bytes = [b0]
+
+    if plen <= 125
+        header_bytes.push(bit_or(mask_bit, plen))
+    elif plen <= 65535
+        header_bytes.push(bit_or(mask_bit, 126))
+        header_bytes.push(bit_and(bit_shr(plen, 8), 255))
+        header_bytes.push(bit_and(plen, 255))
+    else
+        header_bytes.push(bit_or(mask_bit, 127))
+        header_bytes.push(0)
+        header_bytes.push(0)
+        header_bytes.push(0)
+        header_bytes.push(0)
+        header_bytes.push(bit_and(bit_shr(plen, 24), 255))
+        header_bytes.push(bit_and(bit_shr(plen, 16), 255))
+        header_bytes.push(bit_and(bit_shr(plen, 8), 255))
+        header_bytes.push(bit_and(plen, 255))
+    end
+
+    if mask == 1
+        header_bytes.push(mask_key[0])
+        header_bytes.push(mask_key[1])
+        header_bytes.push(mask_key[2])
+        header_bytes.push(mask_key[3])
+    end
+
+    let wire = ""
+    for b in header_bytes
+        wire = wire + chr(b)
+    end
+
+    if mask == 1
+        let masked_payload = ""
+        let k = 0
+        while k < plen
+            let m = mask_key[k % 4]
+            let c = bit_xor(ord(char_at(payload, k)), m)
+            masked_payload = masked_payload + chr(c)
+            k += 1
+        end
+        wire = wire + masked_payload
+    else
+        wire = wire + payload
+    end
+
+    return wire
+end
+
+# Encodes a UTF-8 text message frame (OpCode 1)
+pub function ws_encode_text(text, mask = 0, mask_key = null)
+    return ws_frame_encode(WebSocketOpCode.Text, text, 1, mask, mask_key)
+end
+
+# Encodes a binary message frame (OpCode 2)
+pub function ws_encode_binary(data, mask = 0, mask_key = null)
+    return ws_frame_encode(WebSocketOpCode.Binary, data, 1, mask, mask_key)
+end
+
+# Encodes a close frame (OpCode 8) with optional status code and reason
+pub function ws_encode_close(code = 1000, reason = "", mask = 0, mask_key = null)
+    let payload = ""
+    if code > 0
+        payload = chr(bit_and(bit_shr(code, 8), 255)) + chr(bit_and(code, 255))
+        if reason != ""
+            payload = payload + reason
+        end
+    end
+    return ws_frame_encode(WebSocketOpCode.Close, payload, 1, mask, mask_key)
+end
+
+# Encodes a ping frame (OpCode 9)
+pub function ws_encode_ping(data = "", mask = 0, mask_key = null)
+    return ws_frame_encode(WebSocketOpCode.Ping, data, 1, mask, mask_key)
+end
+
+# Encodes a pong frame (OpCode 10)
+pub function ws_encode_pong(data = "", mask = 0, mask_key = null)
+    return ws_frame_encode(WebSocketOpCode.Pong, data, 1, mask, mask_key)
+end
+
+# ═══════════════════════════════════════════════════════════════
+# Frame Deserialization / Streaming Parser
+# ═══════════════════════════════════════════════════════════════
+
+# Attempts to parse the next RFC 6455 WebSocket frame from raw_data starting at offset.
+# Returns [WebSocketFrame, bytes_consumed].
+# If incomplete, returns [null, 0].
+pub function ws_frame_parse(raw_data, offset = 0)
+    if raw_data is null
+        return [null, 0]
+    end
+    let total_len = len(raw_data)
+    let raw_len = total_len - offset
+    if raw_len < 2
+        return [null, 0]
+    end
+
+    let b0 = ord(char_at(raw_data, offset))
+    let b1 = ord(char_at(raw_data, offset + 1))
+
+    let fin = bit_shr(bit_and(b0, 128), 7)
+    let opcode = bit_and(b0, 15)
+    let masked = bit_shr(bit_and(b1, 128), 7)
+    let plen = bit_and(b1, 127)
+    let header_len = 2
+
+    if plen == 126
+        if raw_len < header_len + 2
+            return [null, 0]
+        end
+        let p0 = ord(char_at(raw_data, offset + 2))
+        let p1 = ord(char_at(raw_data, offset + 3))
+        plen = bit_or(bit_shl(p0, 8), p1)
+        header_len = 4
+    elif plen == 127
+        if raw_len < header_len + 8
+            return [null, 0]
+        end
+        let hi = 0
+        let k = 0
+        while k < 4
+            hi = bit_or(bit_shl(hi, 8), ord(char_at(raw_data, offset + header_len + k)))
+            k += 1
+        end
+        let lo = 0
+        k = 0
+        while k < 4
+            lo = bit_or(bit_shl(lo, 8), ord(char_at(raw_data, offset + header_len + 4 + k)))
+            k += 1
+        end
+        plen = bit_or(bit_shl(hi, 32), lo)
+        header_len = 10
+    end
+
+    let mask_key = null
+    if masked == 1
+        if raw_len < header_len + 4
+            return [null, 0]
+        end
+        mask_key = [
+            ord(char_at(raw_data, offset + header_len)),
+            ord(char_at(raw_data, offset + header_len + 1)),
+            ord(char_at(raw_data, offset + header_len + 2)),
+            ord(char_at(raw_data, offset + header_len + 3))
+        ]
+        header_len += 4
+    end
+
+    if raw_len < header_len + plen
+        return [null, 0]
+    end
+
+    let payload_raw = substring(raw_data, offset + header_len, plen)
+    let payload = ""
+
+    if masked == 1
+        let i = 0
+        while i < plen
+            let c = bit_xor(ord(char_at(payload_raw, i)), mask_key[i % 4])
+            payload = payload + chr(c)
+            i += 1
+        end
+    else
+        payload = payload_raw
+    end
+
+    let consumed = header_len + plen
+    let frame = WebSocketFrame {
+        fin: fin,
+        opcode: opcode,
+        masked: masked,
+        payload: payload,
+        mask_key: mask_key,
+        len: plen
+    }
+
+    return [frame, consumed]
+end

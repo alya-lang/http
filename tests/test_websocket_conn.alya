@@ -1,0 +1,107 @@
+# Test High-Level WebSocket Connection Driver
+import "std/test"
+import "../src/websocket/frame.alya"
+import "../src/websocket/connection.alya"
+
+struct MockStream
+    written
+    closed
+end
+
+function mock_write(stream, data)
+    stream.written = stream.written + data
+    return 1
+end
+
+function mock_close(stream)
+    stream.closed = 1
+    return 1
+end
+
+struct TestStore
+    messages
+    pings
+    pongs
+    closed_code
+    closed_reason
+end
+function handle_msg(conn, msg, is_bin)
+    let s = conn.data
+    push(s.messages, msg)
+end
+
+function handle_ping(conn, data)
+    let s = conn.data
+    push(s.pings, data)
+end
+
+function handle_close(conn, code, reason)
+    let s = conn.data
+    s.closed_code = code
+    s.closed_reason = reason
+end
+
+function main()
+    test_suite("WebSocket Connection Tests")
+    let r = runner_new()
+
+    let mock = MockStream {
+        written: "",
+        closed: 0
+    }
+
+    # Wrap in WebSocketConnection with mock write and close callbacks
+    let ws = ws_connection_new(mock, 1, mock_write, mock_close) # server mode
+    let store = TestStore {
+        messages: [],
+        pings: [],
+        pongs: [],
+        closed_code: 0,
+        closed_reason: ""
+    }
+    ws.data = store
+
+    ws_on_message(ws, handle_msg)
+    ws_on_ping(ws, handle_ping)
+    ws_on_close(ws, handle_close)
+
+    runner_assert_eq(r, ws.state, WebSocketState.Open, "connection initially open")
+
+    # 1. Feed masked client text frame
+    let client_text = "Greetings from client"
+    let wire_text = ws_encode_text(client_text, 1, [1, 2, 3, 4])
+    let fed1 = ws_feed(ws, wire_text)
+    runner_assert_eq(r, fed1, 1, "1 frame processed")
+    runner_assert_eq(r, len(store.messages), 1, "1 message received in callback")
+    runner_assert_str_eq(r, store.messages[0], client_text, "message content matches")
+
+    # 2. Feed Ping frame -> expect automatic Pong in mock stream and on_ping callback
+    let wire_ping = ws_encode_ping("ping-check", 1, [5, 6, 7, 8])
+    let fed2 = ws_feed(ws, wire_ping)
+    runner_assert_eq(r, fed2, 1, "ping frame processed")
+    runner_assert_eq(r, len(store.pings), 1, "ping callback called")
+    runner_assert_str_eq(r, store.pings[0], "ping-check", "ping payload matches")
+
+    # Verify that ws sent back a pong frame
+    runner_assert_eq(r, len(mock.written) > 0, 1, "data written to mock stream")
+    let pong_parse = ws_frame_parse(mock.written, 0)
+    let f_pong = pong_parse[0]
+    runner_assert_eq(r, f_pong is not null, 1, "pong frame was sent")
+    runner_assert_eq(r, f_pong.is_pong(), 1, "frame is pong opcode")
+    runner_assert_str_eq(r, f_pong.payload, "ping-check", "pong echoes ping payload")
+
+    # 3. Feed Close frame -> expect on_close callback and Closed state
+    let wire_close = ws_encode_close(1001, "Going Away", 1, [9, 10, 11, 12])
+    let fed3 = ws_feed(ws, wire_close)
+    runner_assert_eq(r, fed3, 1, "close frame processed")
+    runner_assert_eq(r, ws.state, WebSocketState.Closed, "state transitioned to Closed")
+    runner_assert_eq(r, store.closed_code, 1001, "close code matches")
+    runner_assert_str_eq(r, store.closed_reason, "Going Away", "close reason matches")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

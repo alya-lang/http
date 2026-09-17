@@ -1,0 +1,179 @@
+# Test Reactive HTTP & WebSocket Server Integration over EventLoop
+import "std/test"
+import "std/net" as net
+import "event" as ev
+import "../src/lib.alya" as http
+
+struct TestState
+    get_called
+    post_called
+    ws_received
+end
+
+function handle_get_status(ctx)
+    return http::ctx_json(ctx, "{\"status\":\"healthy\",\"reactor\":true}", 200)
+end
+
+function handle_post_echo(ctx)
+    let body = http::ctx_body(ctx)
+    return http::ctx_text(ctx, "ECHO:" + body, 200)
+end
+
+function handle_ws_msg(conn, msg, is_bin)
+    http::ws_send(conn, "WSECHO:" + msg)
+end
+
+function handle_ws_session(ws, req)
+    http::ws_on_message(ws, handle_ws_msg)
+end
+
+function main()
+    test_suite("Reactive HTTP & WebSocket Server Tests")
+    let r = runner_new()
+
+    let l = ev::loop()
+    let port = 19882
+    let host = "127.0.0.1"
+
+    let rt = http::router()
+    http::router_get(rt, "/api/status", handle_get_status)
+    http::router_post(rt, "/api/echo", handle_post_echo)
+    http::router_get(rt, "/ws", handle_ws_session)
+
+    # 1. Bind reactive server
+    let srv = http::server(port, host, rt)
+    http::server_use_event_loop(srv, l)
+
+    runner_assert_eq(r, srv.running, 1, "reactive server running state")
+    runner_assert(r, srv.server_sock >= 0, "server listening socket fd allocated")
+
+    say "--- SECTION 1 (GET) ---"
+    let client_sock = net::tcp_connect(host, port)
+    runner_assert(r, client_sock >= 0, "client connected to reactive server")
+
+    let raw_get = "GET /api/status HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
+    net::tcp_send(client_sock, raw_get)
+
+    # Tick event loop until response is processed
+    let ticks = 0
+    while ticks < 10
+        let events = ev::loop_tick(l, 50)
+        for e in events
+            ev::loop_dispatch_event(e)
+        end
+        if net::tcp_poll(client_sock, 10) == 1
+            break
+        end
+        ticks += 1
+    end
+
+    let resp_wire = net::tcp_recv(client_sock, 4096)
+    net::tcp_close(client_sock)
+
+    runner_assert(r, len(resp_wire) > 0, "received HTTP GET response")
+    let parsed_get = http::http_parse_response(resp_wire)
+    runner_assert_eq(r, parsed_get.status_code, 200, "status code 200 OK")
+    runner_assert_eq(r, index_of(parsed_get.body, "\"status\":\"healthy\"") >= 0, 1, "body contains healthy")
+    runner_assert_eq(r, index_of(parsed_get.body, "\"reactor\":true") >= 0, 1, "body contains reactor:true")
+
+    say "--- SECTION 2 (POST) ---"
+    let client_post = net::tcp_connect(host, port)
+    runner_assert(r, client_post >= 0, "client connected for POST")
+
+    let post_body = "Hello from Reactive Reactor!"
+    let raw_post = "POST /api/echo HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: " + str(len(post_body)) + "\r\nConnection: close\r\n\r\n" + post_body
+    net::tcp_send(client_post, raw_post)
+
+    ticks = 0
+    while ticks < 10
+        let events = ev::loop_tick(l, 50)
+        for e in events
+            ev::loop_dispatch_event(e)
+        end
+        if net::tcp_poll(client_post, 10) == 1
+            break
+        end
+        ticks += 1
+    end
+
+    let resp_post_wire = net::tcp_recv(client_post, 4096)
+    net::tcp_close(client_post)
+
+    runner_assert(r, len(resp_post_wire) > 0, "received HTTP POST response")
+    let parsed_post = http::http_parse_response(resp_post_wire)
+    runner_assert_eq(r, parsed_post.status_code, 200, "POST status code 200 OK")
+    runner_assert_str_eq(r, parsed_post.body, "ECHO:" + post_body, "POST echoed body matches")
+
+    say "--- SECTION 3 (WS Handshake) ---"
+    let ws_sock = net::tcp_connect(host, port)
+    runner_assert(r, ws_sock >= 0, "client connected for WebSocket upgrade")
+
+    let ws_key = "dGhlIHNhbXBsZSBub25jZQ=="
+    let ws_handshake_req = "GET /ws HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: " + ws_key + "\r\nSec-WebSocket-Version: 13\r\n\r\n"
+    net::tcp_send(ws_sock, ws_handshake_req)
+
+    # Process handshake in event loop
+    ticks = 0
+    while ticks < 10
+        let events = ev::loop_tick(l, 50)
+        for e in events
+            ev::loop_dispatch_event(e)
+        end
+        if net::tcp_poll(ws_sock, 10) == 1
+            break
+        end
+        ticks += 1
+    end
+
+    let hs_response = ""
+    if net::tcp_poll(ws_sock, 100) == 1
+        hs_response = net::tcp_recv(ws_sock, 4096)
+    end
+    runner_assert(r, len(hs_response) > 0, "received WebSocket handshake response")
+    runner_assert_eq(r, index_of(hs_response, "HTTP/1.1 101 Switching Protocols") >= 0, 1, "handshake status 101")
+    runner_assert_eq(r, index_of(hs_response, "Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") >= 0, 1, "accept key matches RFC 6455 vector")
+
+    say "--- SECTION 4 (WS Echo) ---"
+
+    # Now send masked WebSocket text frame
+    let client_ws_msg = "Hello Reactive WebSocket!"
+    let frame_wire = http::ws_encode_text(client_ws_msg, 1, [1, 2, 3, 4])
+    net::tcp_send(ws_sock, frame_wire)
+
+    # Process WebSocket frame in event loop
+    ticks = 0
+    while ticks < 10
+        let events = ev::loop_tick(l, 50)
+        for e in events
+            ev::loop_dispatch_event(e)
+        end
+        if net::tcp_poll(ws_sock, 10) == 1
+            break
+        end
+        ticks += 1
+    end
+
+    let server_ws_wire = ""
+    if net::tcp_poll(ws_sock, 100) == 1
+        server_ws_wire = net::tcp_recv(ws_sock, 4096)
+    end
+    net::tcp_close(ws_sock)
+
+    runner_assert(r, len(server_ws_wire) > 0, "received WebSocket echo frame from server")
+    let parsed_frame_res = http::ws_frame_parse(server_ws_wire, 0)
+    let echo_frame = parsed_frame_res[0]
+    runner_assert_eq(r, echo_frame is not null, 1, "echo frame parsed")
+    runner_assert_eq(r, http::ws_frame_is_text(echo_frame), 1, "echo frame is text")
+    runner_assert_str_eq(r, echo_frame.payload, "WSECHO:" + client_ws_msg, "echo payload matches")
+
+    # 5. Clean server shutdown
+    http::server_close_reactive(srv)
+    runner_assert_eq(r, srv.running, 0, "server stopped")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()
