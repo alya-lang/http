@@ -9,7 +9,7 @@ pub function cookie_new(name, value, path = "/", max_age = -1, http_only = 0, se
 end
 
 # Formats an HttpCookie struct into a valid Set-Cookie header value
-pub function cookie_format(c)
+pub function cookie_format(c: HttpCookie)
     if c is null
         return ""
     end

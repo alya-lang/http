@@ -236,35 +236,35 @@ end
 # Event Registration & Struct Methods
 # ═══════════════════════════════════════════════════════════════
 
-pub function ws_on_message(ws, callback)
+pub function ws_on_message(ws: WebSocketConnection, callback)
     if ws is not null
         ws.on_message_cb = callback
     end
     return ws
 end
 
-pub function ws_on_close(ws, callback)
+pub function ws_on_close(ws: WebSocketConnection, callback)
     if ws is not null
         ws.on_close_cb = callback
     end
     return ws
 end
 
-pub function ws_on_ping(ws, callback)
+pub function ws_on_ping(ws: WebSocketConnection, callback)
     if ws is not null
         ws.on_ping_cb = callback
     end
     return ws
 end
 
-pub function ws_on_pong(ws, callback)
+pub function ws_on_pong(ws: WebSocketConnection, callback)
     if ws is not null
         ws.on_pong_cb = callback
     end
     return ws
 end
 
-pub function ws_on_error(ws, callback)
+pub function ws_on_error(ws: WebSocketConnection, callback)
     if ws is not null
         ws.on_error_cb = callback
     end
