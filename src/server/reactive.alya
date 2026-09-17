@@ -128,7 +128,7 @@ pub function _on_reactive_client_data(client_stream: TcpStream, chunk)
 
             # --- Standard HTTP Content-Length check ---
             let cl_val = header_get(req.headers, "content-length", "0")
-            state.content_length = int(cl_val)
+            state.content_length = to_int(cl_val)
         end
     end
 
