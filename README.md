@@ -90,11 +90,11 @@ Add `http` to your project's `alya.toml`:
 http = { git = "https://github.com/alya-lang/http", branch = "main" }
 ```
 
-Or install it directly via the `alyac` CLI:
+Or install it directly via the `alya` CLI:
 
 ```bash
-alyac add http --git https://github.com/alya-lang/http --branch main
-alyac install
+alya add http --git https://github.com/alya-lang/http --branch main
+alya install
 ```
 
 ---
@@ -260,32 +260,32 @@ main()
 
 ## 🧪 Running Tests & Benchmarks
 
-Run all 14 test suites using `alyac`:
+Run all 14 test suites using `alya`:
 
 ```bash
-alyac test
+alya test
 ```
 
 Run individual test files:
 
 ```bash
-alyac run tests/test_compression.alya
-alyac run tests/test_protocol.alya
-alyac run tests/test_router.alya
-alyac run tests/test_cookies.alya
+alya run tests/test_compression.alya
+alya run tests/test_protocol.alya
+alya run tests/test_router.alya
+alya run tests/test_cookies.alya
 ```
 
 Run benchmarks:
 
 ```bash
-alyac run benches/bench_basic.alya
+alya run benches/bench_basic.alya
 ```
 
 Run the demo examples:
 
 ```bash
-alyac run examples/demo.alya
-alyac run examples/compression_demo.alya
+alya run examples/demo.alya
+alya run examples/compression_demo.alya
 ```
 
 ---
@@ -297,7 +297,7 @@ Contributions are welcome! Please follow these steps:
 1. Fork the repository and clone it locally
 2. Install the package tools:
    ```bash
-   alyac install
+   alya install
    ```
 3. Create your feature branch:
    ```bash
@@ -305,8 +305,8 @@ Contributions are welcome! Please follow these steps:
    ```
 4. Verify tests and code formatting before opening a PR:
    ```bash
-   alyac test
-   alyac fmt . --check
+   alya test
+   alya fmt . --check
    ```
 5. Commit your changes:
    ```bash

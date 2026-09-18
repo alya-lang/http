@@ -2,7 +2,7 @@
 # Demonstrates server compression middleware, content negotiation,
 # pre-compressed static assets, and client decompression.
 #
-# Run with: alyac run examples/compression_demo.alya
+# Run with: alya run examples/compression_demo.alya
 
 import "../src/lib.alya" as http
 
