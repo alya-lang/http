@@ -81,11 +81,10 @@ end
 pub function client_execute(client, method, url_str, extra_headers = null, body = "")
     let parsed = url_pkg::url_parse(url_str)
     let host = parsed.host
-    if host == ""
+    let scheme = parsed.scheme
+    if host == "" or (scheme != "http" and scheme != "https")
         return HttpResponse(-1, "Invalid URL host: " + url_str, {}, "", [])
     end
-
-    let scheme = parsed.scheme
 
     let p_str = url_pkg::url_effective_port(parsed)
     let effective_port = 0
@@ -136,7 +135,12 @@ pub function client_execute(client, method, url_str, extra_headers = null, body 
     end
 
     # Native TCP socket request for standard HTTP
-    let sock = net::tcp_connect(host, effective_port)
+    let sock = -1
+    try
+        sock = net::tcp_connect(host, effective_port)
+    catch e
+        return HttpResponse(-1, "Connection failed to " + host + ":" + str(effective_port), {}, "", [])
+    end
     if sock < 0
         return HttpResponse(-1, "Connection failed to " + host + ":" + str(effective_port), {}, "", [])
     end
