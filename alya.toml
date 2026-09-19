@@ -1,6 +1,6 @@
 [package]
 name = "http"
-version = "0.7.0"
+version = "0.1.0"
 alya-version = "0.0.18"
 entry = "src/lib.alya"
 description = "Production-ready HTTP and WebSocket client, server, router, reactive event loop, and middleware toolkit for Alya"
@@ -11,8 +11,8 @@ repository = "https://github.com/alya-lang/http"
 keywords = ["alya", "alya-lang", "package", "http", "https", "server", "client", "router", "middleware", "compression", "brotli", "gzip", "deflate", "zstd", "websocket", "reactive", "networking", "rest-api"]
 
 [dependencies]
-compress = { git = "https://github.com/alya-lang/compress", tag = "v0.5.0" }
-crypto = { git = "https://github.com/alya-lang/crypto", tag = "v0.7.0" }
-event = { git = "https://github.com/alya-lang/event", tag = "v0.2.1" }
-mime = { git = "https://github.com/alya-lang/mime", tag = "v0.4.0" }
-url = { git = "https://github.com/alya-lang/url", tag = "v0.4.0" }
+compress = { git = "https://github.com/alya-lang/compress", tag = "v0.1.0" }
+crypto = { git = "https://github.com/alya-lang/crypto", tag = "v0.1.0" }
+event = { git = "https://github.com/alya-lang/event", tag = "v0.1.0" }
+mime = { git = "https://github.com/alya-lang/mime", tag = "v0.1.0" }
+url = { git = "https://github.com/alya-lang/url", tag = "v0.1.0" }
