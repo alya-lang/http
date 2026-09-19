@@ -38,7 +38,27 @@ end
 
 # Creates a new HttpRoute definition struct
 pub function route_new(method, pattern, action)
-    let m = upper(trim(method))
+    let m = "GET"
+    let raw_m = upper(trim(method))
+    if raw_m == "GET"
+        m = "GET"
+    elif raw_m == "POST"
+        m = "POST"
+    elif raw_m == "PUT"
+        m = "PUT"
+    elif raw_m == "DELETE"
+        m = "DELETE"
+    elif raw_m == "PATCH"
+        m = "PATCH"
+    elif raw_m == "HEAD"
+        m = "HEAD"
+    elif raw_m == "OPTIONS"
+        m = "OPTIONS"
+    elif raw_m == "ANY" or raw_m == "*"
+        m = "ANY"
+    else
+        m = raw_m
+    end
     let segs = route_split_path(pattern)
     return HttpRoute {
         method: m,

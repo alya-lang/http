@@ -72,121 +72,134 @@ pub function _on_reactive_client_data(client_stream: TcpStream, chunk)
     # 2. Accumulate incoming bytes for HTTP request framing
     state.buffer = state.buffer + chunk
 
-    # 3. Header parsing phase
-    if state.headers_parsed == 0
-        let delim_idx = _proto_find(state.buffer, "\r\n\r\n", 0)
-        let delim_len = 4
-        if delim_idx < 0
-            delim_idx = _proto_find(state.buffer, "\n\n", 0)
-            delim_len = 2
+    while 1
+        # 3. Header parsing phase
+        if state.headers_parsed == 0
+            let delim_idx = _proto_find(state.buffer, "\r\n\r\n", 0)
+            let delim_len = 4
+            if delim_idx < 0
+                delim_idx = _proto_find(state.buffer, "\n\n", 0)
+                delim_len = 2
+            end
+
+            if delim_idx >= 0
+                let header_str = substring(state.buffer, 0, delim_idx)
+                let remainder = ""
+                let rem_start = delim_idx + delim_len
+                if rem_start < len(state.buffer)
+                    remainder = substring(state.buffer, rem_start, len(state.buffer) - rem_start)
+                end
+                state.buffer = remainder
+                state.headers_parsed = 1
+
+                let remote_addr = client_stream.peer_addr
+                let req = http_parse_request(header_str + "\r\n\r\n", remote_addr)
+                state.req = req
+
+                # --- Check for WebSocket Upgrade ---
+                if ws_is_upgrade_request(req) == 1
+                    let accept_resp = ws_handshake_response(req)
+                    ev::tcp_stream_write(client_stream, accept_resp)
+
+                    let ws: WebSocketConnection = ws_connection_from_stream(client_stream, 1)
+                    state.is_websocket = 1
+                    state.ws_conn = ws
+
+                    # Dispatch WebSocket handler
+                    let ws_handled = 0
+                    let m = router_match(state.server.router, req.method, req.path)
+                    if m.found == 1 and m.action is not null
+                        let act = m.action
+                        act(ws, req)
+                        ws_handled = 1
+                    end
+
+                    if ws_handled == 0 and state.on_websocket_cb is not null
+                        let ws_cb = state.on_websocket_cb
+                        ws_cb(ws, req)
+                    end
+
+                    # If remainder buffer already has frames, feed them into WebSocket
+                    if len(state.buffer) > 0
+                        ws_feed(ws, state.buffer)
+                        state.buffer = ""
+                    end
+                    return 1
+                end
+
+                # --- Standard HTTP Content-Length check ---
+                let cl_val = header_get(req.headers, "content-length", "0")
+                state.content_length = to_int(cl_val)
+            else
+                break
+            end
         end
 
-        if delim_idx >= 0
-            let header_str = substring(state.buffer, 0, delim_idx)
-            let remainder = ""
-            let rem_start = delim_idx + delim_len
-            if rem_start < len(state.buffer)
-                remainder = substring(state.buffer, rem_start, len(state.buffer) - rem_start)
-            end
-            state.buffer = remainder
-            state.headers_parsed = 1
+        # 4. Body parsing phase
+        if state.headers_parsed == 1
+            let req_cl = state.content_length
+            if len(state.buffer) >= req_cl
+                let body_data = ""
+                if req_cl > 0
+                    body_data = substring(state.buffer, 0, req_cl)
+                    if len(state.buffer) > req_cl
+                        state.buffer = substring(state.buffer, req_cl, len(state.buffer) - req_cl)
+                    else
+                        state.buffer = ""
+                    end
+                end
+                let req: HttpRequest = state.req
+                req.body = body_data
+                state.req = req
 
-            let remote_addr = client_stream.peer_addr
-            let req = http_parse_request(header_str + "\r\n\r\n", remote_addr)
-            state.req = req
+                let res = response_create(200, "OK")
+                let ctx = context_create(req, res, client_stream.fd)
 
-            # --- Check for WebSocket Upgrade ---
-            if ws_is_upgrade_request(req) == 1
-                let accept_resp = ws_handshake_response(req)
-                ev::tcp_stream_write(client_stream, accept_resp)
+                # Apply server middlewares and router matching
+                let m = server_process(state.server, ctx)
 
-                let ws: WebSocketConnection = ws_connection_from_stream(client_stream, 1)
-                state.is_websocket = 1
-                state.ws_conn = ws
-
-                # Dispatch WebSocket handler
-                let ws_handled = 0
-                let m = router_match(state.server.router, req.method, req.path)
+                # Dispatch route action or global request callback
                 if m.found == 1 and m.action is not null
                     let act = m.action
-                    act(ws, req)
-                    ws_handled = 1
+                    act(ctx)
+                elif state.on_request_cb is not null
+                    let req_cb = state.on_request_cb
+                    req_cb(ctx)
                 end
 
-                if ws_handled == 0 and state.on_websocket_cb is not null
-                    let ws_cb = state.on_websocket_cb
-                    ws_cb(ws, req)
+                # Apply compression if enabled
+                if state.server.options["compression_enabled"] == 1
+                    mw_apply_compression(ctx, state.server.options["compression_config"])
                 end
 
-                # If remainder buffer already has frames, feed them into WebSocket
-                if len(state.buffer) > 0
-                    ws_feed(ws, state.buffer)
-                    state.buffer = ""
+                # Log request if logger is enabled
+                if state.server.options["logger_enabled"] == 1
+                    mw_log_context(ctx)
                 end
-                return 1
-            end
 
-            # --- Standard HTTP Content-Length check ---
-            let cl_val = header_get(req.headers, "content-length", "0")
-            state.content_length = to_int(cl_val)
-        end
-    end
-
-    # 4. Body parsing phase
-    if state.headers_parsed == 1
-        let req_cl = state.content_length
-        if len(state.buffer) >= req_cl
-            let body_data = ""
-            if req_cl > 0
-                body_data = substring(state.buffer, 0, req_cl)
-                if len(state.buffer) > req_cl
-                    state.buffer = substring(state.buffer, req_cl, len(state.buffer) - req_cl)
+                # Connection persistence handling (Keep-Alive vs Close)
+                let conn_hdr = lower(header_get(state.req.headers, "connection", ""))
+                if conn_hdr == "close"
+                    header_set(ctx.res.headers, "Connection", "close")
                 else
-                    state.buffer = ""
+                    header_set(ctx.res.headers, "Connection", "keep-alive")
                 end
-            end
-            let req: HttpRequest = state.req
-            req.body = body_data
-            state.req = req
 
-            let res = response_create(200, "OK")
-            let ctx = context_create(req, res, client_stream.fd)
+                # Serialize and write HTTP response non-blockingly
+                let wire = http_format_response(ctx.res)
+                ev::tcp_stream_write(client_stream, wire)
 
-            # Apply server middlewares and router matching
-            let m = server_process(state.server, ctx)
-
-            # Dispatch route action or global request callback
-            if m.found == 1 and m.action is not null
-                let act = m.action
-                act(ctx)
-            elif state.on_request_cb is not null
-                let req_cb = state.on_request_cb
-                req_cb(ctx)
-            end
-
-            # Apply compression if enabled
-            if state.server.options["compression_enabled"] == 1
-                mw_apply_compression(ctx, state.server.options["compression_config"])
-            end
-
-            # Log request if logger is enabled
-            if state.server.options["logger_enabled"] == 1
-                mw_log_context(ctx)
-            end
-
-            # Serialize and write HTTP response non-blockingly
-            let wire = http_format_response(ctx.res)
-            ev::tcp_stream_write(client_stream, wire)
-
-            # Connection persistence handling (Keep-Alive vs Close)
-            let conn_hdr = lower(header_get(state.req.headers, "connection", ""))
-            if conn_hdr == "close"
-                ev::tcp_stream_close(client_stream)
+                if conn_hdr == "close"
+                    ev::tcp_stream_close(client_stream)
+                    break
+                else
+                    # Reset state for keep-alive HTTP pipeline
+                    state.headers_parsed = 0
+                    state.req = null
+                    state.content_length = 0
+                end
             else
-                # Reset state for keep-alive HTTP pipeline
-                state.headers_parsed = 0
-                state.req = null
-                state.content_length = 0
+                break
             end
         end
     end

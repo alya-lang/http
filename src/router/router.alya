@@ -111,7 +111,25 @@ pub function router_match(r, method, path)
         return RouteMatch(0, "not_found", "", {}, 404, [])
     end
 
-    let req_method = upper(trim(method))
+    let raw_m = upper(trim(method))
+    let req_method = "GET"
+    if raw_m == "GET"
+        req_method = "GET"
+    elif raw_m == "POST"
+        req_method = "POST"
+    elif raw_m == "PUT"
+        req_method = "PUT"
+    elif raw_m == "DELETE"
+        req_method = "DELETE"
+    elif raw_m == "PATCH"
+        req_method = "PATCH"
+    elif raw_m == "HEAD"
+        req_method = "HEAD"
+    elif raw_m == "OPTIONS"
+        req_method = "OPTIONS"
+    else
+        req_method = raw_m
+    end
     let req_segs = route_split_path(path)
     let allowed_methods = []
 
