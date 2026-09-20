@@ -288,6 +288,18 @@ alya run examples/demo.alya
 alya run examples/compression_demo.alya
 ```
 
+Check code formatting:
+
+```bash
+alya fmt . --check
+```
+
+Run static code linter:
+
+```bash
+alya lint . --check
+```
+
 ---
 
 ## 🤝 Contributing
