@@ -1,7 +1,7 @@
 [package]
 name = "http"
 version = "0.1.0"
-alya-version = "0.0.18"
+alya-version = "0.0.19"
 entry = "src/lib.alya"
 description = "Production-ready HTTP and WebSocket client, server, router, reactive event loop, and middleware toolkit for Alya"
 authors = ["Alya Language Contributors <https://github.com/alya-lang>"]
