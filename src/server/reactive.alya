@@ -1,38 +1,34 @@
-# Reactive Event-Driven HTTP Server Adapter
-# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+## Reactive Event-Driven HTTP Server Adapter.
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
-import "std/net" as net
-import "std/str"
 import "event" as ev
 import "../types.alya"
 import "../core/protocol.alya"
 import "../core/headers.alya"
 import "../router/router.alya"
-import "../middleware/cors.alya"
 import "../middleware/logger.alya"
-import "../middleware/static.alya"
 import "../middleware/compress.alya"
-import "../core/compression.alya"
 import "../websocket/handshake.alya"
-import "../websocket/frame.alya"
 import "../websocket/connection.alya"
 import "./context.alya"
 import "./server.alya"
 
+## Internal writer callback for WebSocket over event::TcpStream.
 pub function _reactive_ws_write(s: TcpStream, data)
     return ev::tcp_stream_write(s, data)
 end
 
+## Internal closer callback for WebSocket over event::TcpStream.
 pub function _reactive_ws_close(s: TcpStream)
     return ev::tcp_stream_close(s)
 end
 
-# Creates a WebSocket connection over an event::TcpStream
+## Creates a WebSocket connection over an event::TcpStream.
 pub function ws_connection_from_stream(stream: TcpStream, is_server = 1) -> WebSocketConnection
     return ws_connection_new(stream, is_server, _reactive_ws_write, _reactive_ws_close)
 end
 
-# Represents the per-connection state of a reactive HTTP/WebSocket client
+## Represents the per-connection state of a reactive HTTP/WebSocket client.
 pub struct ReactiveClientState
     stream
     server
@@ -46,11 +42,13 @@ pub struct ReactiveClientState
     on_websocket_cb
 end
 
-pub function _on_reactive_client_close(client_stream: TcpStream)
+## Callback invoked when a reactive client stream is closed.
+pub function _on_reactive_client_close(_client_stream: TcpStream)
     # Stream cleanup is managed automatically by event::TcpStream
     return 0
 end
 
+## Callback invoked when data arrives on a reactive client stream.
 pub function _on_reactive_client_data(client_stream: TcpStream, chunk)
     if client_stream is null or chunk is null or len(chunk) == 0
         return 0
@@ -207,6 +205,7 @@ pub function _on_reactive_client_data(client_stream: TcpStream, chunk)
     return 1
 end
 
+## Callback invoked when a new client connects to the reactive server.
 pub function _on_reactive_client_connect(tcp_srv: TcpServer, client_stream: TcpStream)
     let srv = tcp_srv.data
     if srv is null
@@ -232,7 +231,8 @@ pub function _on_reactive_client_connect(tcp_srv: TcpServer, client_stream: TcpS
     return 1
 end
 
-pub function _on_reactive_server_error(tcp_srv: TcpServer, err_msg)
+## Callback invoked when a server-level socket error occurs.
+pub function _on_reactive_server_error(_tcp_srv: TcpServer, _err_msg)
     return 0
 end
 
@@ -240,7 +240,7 @@ end
 # Public Reactive Server Adapter API
 # ═══════════════════════════════════════════════════════════════
 
-# Binds the HttpServer to an EventLoop, enabling reactive non-blocking I/O
+## Binds the HttpServer to an EventLoop, enabling reactive non-blocking I/O.
 pub function server_use_event_loop(srv: HttpServer, loop: EventLoop, on_request = null, on_websocket = null)
     if srv is null or loop is null
         return null
@@ -263,12 +263,12 @@ pub function server_use_event_loop(srv: HttpServer, loop: EventLoop, on_request 
     return srv
 end
 
-# Shorthand factory for starting a reactive HTTP server
+## Shorthand factory for starting a reactive HTTP server.
 pub function server_listen_reactive(srv: HttpServer, loop: EventLoop, on_request = null, on_websocket = null)
     return server_use_event_loop(srv, loop, on_request, on_websocket)
 end
 
-# Closes the reactive HTTP server and stops accepting connections
+## Closes the reactive HTTP server and stops accepting connections.
 pub function server_close_reactive(srv: HttpServer)
     if srv is null
         return 0
@@ -282,11 +282,12 @@ pub function server_close_reactive(srv: HttpServer)
     return 1
 end
 
-# Struct method for HttpServer.use_event_loop
+## Struct method for HttpServer.use_event_loop.
 pub function HttpServer.use_event_loop(self, loop, on_request = null, on_websocket = null)
     return server_use_event_loop(self, loop, on_request, on_websocket)
 end
 
+## Struct method for HttpServer.close_reactive.
 pub function HttpServer.close_reactive(self)
     return server_close_reactive(self)
 end

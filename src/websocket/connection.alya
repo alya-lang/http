@@ -1,10 +1,8 @@
-# High-Level RFC 6455 WebSocket Connection & Protocol Driver
-# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+## High-Level RFC 6455 WebSocket Connection & Protocol Driver.
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
 import "std/net" as net
-import "std/str"
 import "./frame.alya"
-import "./handshake.alya"
 
 # WebSocket Lifecycle States
 pub enum WebSocketState
@@ -191,41 +189,42 @@ pub function ws_feed(ws: WebSocketConnection, chunk)
         frames_processed += 1
 
         # Process frame based on OpCode
-        if ws_frame_is_text(frame)
-            let cb = ws.on_message_cb
-            if cb is not null
-                cb(ws, frame.payload, 0)
-            end
-        elif ws_frame_is_binary(frame)
-            let cb = ws.on_message_cb
-            if cb is not null
-                cb(ws, frame.payload, 1)
-            end
-        elif ws_frame_is_ping(frame)
-            # Automatic RFC 6455 Ping-Pong reply
-            ws_pong(ws, frame.payload)
-            let cb = ws.on_ping_cb
-            if cb is not null
-                cb(ws, frame.payload)
-            end
-        elif ws_frame_is_pong(frame)
-            let cb = ws.on_pong_cb
-            if cb is not null
-                cb(ws, frame.payload)
-            end
-        elif ws_frame_is_close(frame)
-            let code = 1000
-            let reason = ""
-            if frame.len >= 2
-                let b0 = ord(char_at(frame.payload, 0))
-                let b1 = ord(char_at(frame.payload, 1))
-                code = bit_or(bit_shl(b0, 8), b1)
-                if frame.len > 2
-                    reason = substring(frame.payload, 2, frame.len - 2)
+        when frame.opcode
+            is WebSocketOpCode.Text then
+                let cb = ws.on_message_cb
+                if cb is not null
+                    cb(ws, frame.payload, 0)
                 end
-            end
-            ws_close(ws, code, reason)
-            break
+            is WebSocketOpCode.Binary then
+                let cb = ws.on_message_cb
+                if cb is not null
+                    cb(ws, frame.payload, 1)
+                end
+            is WebSocketOpCode.Ping then
+                # Automatic RFC 6455 Ping-Pong reply
+                ws_pong(ws, frame.payload)
+                let cb = ws.on_ping_cb
+                if cb is not null
+                    cb(ws, frame.payload)
+                end
+            is WebSocketOpCode.Pong then
+                let cb = ws.on_pong_cb
+                if cb is not null
+                    cb(ws, frame.payload)
+                end
+            is WebSocketOpCode.Close then
+                let code = 1000
+                let reason = ""
+                if frame.len >= 2
+                    let b0 = ord(char_at(frame.payload, 0))
+                    let b1 = ord(char_at(frame.payload, 1))
+                    code = bit_or(bit_shl(b0, 8), b1)
+                    if frame.len > 2
+                        reason = substring(frame.payload, 2, frame.len - 2)
+                    end
+                end
+                ws_close(ws, code, reason)
+                break
         end
     end
 

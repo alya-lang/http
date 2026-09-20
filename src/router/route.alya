@@ -1,9 +1,9 @@
-# HTTP Route Definition and Path Pattern Matching
-# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+## HTTP Route Definition and Path Pattern Matching.
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
 import "../types.alya"
 
-# Splits a URL path into clean, non-empty segments
+## Splits a URL path into clean, non-empty segments.
 pub function route_split_path(path)
     if path is null or len(path) == 0 or path == "/"
         return []
@@ -36,28 +36,21 @@ pub function route_split_path(path)
     return segments
 end
 
-# Creates a new HttpRoute definition struct
+## Creates a new HttpRoute definition struct.
 pub function route_new(method, pattern, action)
     let m = "GET"
     let raw_m = upper(trim(method))
-    if raw_m == "GET"
-        m = "GET"
-    elif raw_m == "POST"
-        m = "POST"
-    elif raw_m == "PUT"
-        m = "PUT"
-    elif raw_m == "DELETE"
-        m = "DELETE"
-    elif raw_m == "PATCH"
-        m = "PATCH"
-    elif raw_m == "HEAD"
-        m = "HEAD"
-    elif raw_m == "OPTIONS"
-        m = "OPTIONS"
-    elif raw_m == "ANY" or raw_m == "*"
-        m = "ANY"
-    else
-        m = raw_m
+    when raw_m
+        is "GET" then m = "GET"
+        is "POST" then m = "POST"
+        is "PUT" then m = "PUT"
+        is "DELETE" then m = "DELETE"
+        is "PATCH" then m = "PATCH"
+        is "HEAD" then m = "HEAD"
+        is "OPTIONS" then m = "OPTIONS"
+        is "ANY" then m = "ANY"
+        is "*" then m = "ANY"
+        else m = raw_m
     end
     let segs = route_split_path(pattern)
     return HttpRoute {
@@ -68,8 +61,8 @@ pub function route_new(method, pattern, action)
     }
 end
 
-# Matches a request path against a route pattern's segments
-# Returns Map: {"matched": 1, "params": {...}} or {"matched": 0}
+## Matches a request path against a route pattern's segments.
+## Returns Map: {"matched": 1, "params": {...}} or {"matched": 0}.
 pub function route_match_segments(pat_segs, req_segs)
     let plen = len(pat_segs)
     let rlen = len(req_segs)

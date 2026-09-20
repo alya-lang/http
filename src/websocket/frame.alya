@@ -1,9 +1,7 @@
-# RFC 6455 WebSocket Frame Definition, Framing, and Streaming Parser
-# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+## RFC 6455 WebSocket Frame Definition, Framing, and Streaming Parser.
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
-import "std/str"
-
-# RFC 6455 WebSocket OpCodes
+## RFC 6455 WebSocket OpCodes.
 pub enum WebSocketOpCode
     Continuation = 0
     Text = 1
@@ -168,10 +166,11 @@ pub function ws_frame_encode(opcode, payload = "", is_final = 1, mask = 0, mask_
     end
 
     let mask_bit = 0
+    let effective_mask_key = [53, 102, 169, 212]
     if mask == 1
         mask_bit = 128
-        if mask_key is null or len(mask_key) < 4
-            mask_key = [53, 102, 169, 212]
+        if mask_key is not null and len(mask_key) >= 4
+            effective_mask_key = mask_key
         end
     end
 
@@ -196,10 +195,10 @@ pub function ws_frame_encode(opcode, payload = "", is_final = 1, mask = 0, mask_
     end
 
     if mask == 1
-        header_bytes.push(mask_key[0])
-        header_bytes.push(mask_key[1])
-        header_bytes.push(mask_key[2])
-        header_bytes.push(mask_key[3])
+        header_bytes.push(effective_mask_key[0])
+        header_bytes.push(effective_mask_key[1])
+        header_bytes.push(effective_mask_key[2])
+        header_bytes.push(effective_mask_key[3])
     end
 
     let wire = ""
@@ -211,7 +210,7 @@ pub function ws_frame_encode(opcode, payload = "", is_final = 1, mask = 0, mask_
         let masked_payload = ""
         let k = 0
         while k < plen
-            let m = mask_key[k % 4]
+            let m = effective_mask_key[k % 4]
             let c = bit_xor(ord(char_at(payload, k)), m)
             masked_payload = masked_payload + chr(c)
             k += 1
@@ -310,7 +309,7 @@ pub function ws_frame_parse(raw_data, offset = 0)
         header_len = 10
     end
 
-    let mask_key = null
+    let mask_key = []
     if masked == 1
         if raw_len < header_len + 4
             return [null, 0]

@@ -1,9 +1,7 @@
-# HTTP Request Logger Middleware
-# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+## HTTP Request Logger Middleware.
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
-import "../types.alya"
-
-# Formats a structured log message string for an HTTP request
+## Formats a structured log message string for an HTTP request.
 pub function mw_format_log(method, path, status, latency_ms = -1, remote_addr = "")
     let msg = "[HTTP] " + method + " " + path + " " + str(status)
     if latency_ms >= 0
@@ -15,7 +13,7 @@ pub function mw_format_log(method, path, status, latency_ms = -1, remote_addr = 
     return msg
 end
 
-# Logs an HttpContext request and response lifecycle
+## Logs an HttpContext request and response lifecycle.
 pub function mw_log_context(ctx, latency_ms = -1)
     if ctx is null or ctx.req is null
         return null

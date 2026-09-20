@@ -1,11 +1,9 @@
-# HTTP Compression and Decompression Engine
-# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+## HTTP Compression and Decompression Engine.
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
 import "compress" as compress_pkg
-import "../types.alya"
-import "./headers.alya"
 
-# Internal substring search helper
+## Internal substring search helper.
 pub function _comp_str_find(s, target, start_idx = 0)
     let slen = len(s)
     let tlen = len(target)
@@ -22,53 +20,45 @@ pub function _comp_str_find(s, target, start_idx = 0)
     return -1
 end
 
-# Compresses a payload string with the given algorithm ("gzip", "br"/"brotli", "deflate", "zstd")
-# Returns compressed byte list, or null if encoding is unsupported
+## Compresses a payload string with the given algorithm ("gzip", "br"/"brotli", "deflate", "zstd").
+## Returns compressed byte list, or null if encoding is unsupported.
 pub function http_compress(data_str, encoding = "gzip")
     let enc = lower(trim(encoding))
-    if enc == "gzip"
-        return compress_pkg::gzip_str(data_str)
-    elif enc == "br" or enc == "brotli"
-        return compress_pkg::brotli_str(data_str)
-    elif enc == "deflate"
-        return compress_pkg::deflate_str(data_str)
-    elif enc == "zstd"
-        return compress_pkg::zstd_str(data_str)
-    elif enc == "identity"
-        return compress_pkg::bytes_from_string(data_str)
-    else
-        return null
+    when enc
+        is "gzip" then return compress_pkg::gzip_str(data_str)
+        is "br" then return compress_pkg::brotli_str(data_str)
+        is "brotli" then return compress_pkg::brotli_str(data_str)
+        is "deflate" then return compress_pkg::deflate_str(data_str)
+        is "zstd" then return compress_pkg::zstd_str(data_str)
+        is "identity" then return compress_pkg::bytes_from_string(data_str)
+        else return null
     end
 end
 
-# Decompresses a byte list with the given algorithm into a UTF-8 string
-# Returns decompressed string, or null if encoding is unsupported
+## Decompresses a byte list with the given algorithm into a UTF-8 string.
+## Returns decompressed string, or null if encoding is unsupported.
 pub function http_decompress(bytes_list, encoding = "gzip")
     let enc = lower(trim(encoding))
-    if enc == "gzip"
-        return compress_pkg::gunzip_str(bytes_list)
-    elif enc == "br" or enc == "brotli"
-        return compress_pkg::unbrotli_str(bytes_list)
-    elif enc == "deflate"
-        return compress_pkg::inflate_str(bytes_list)
-    elif enc == "zstd"
-        return compress_pkg::unzstd_str(bytes_list)
-    elif enc == "identity"
-        return compress_pkg::bytes_to_string(bytes_list)
-    else
-        return null
+    when enc
+        is "gzip" then return compress_pkg::gunzip_str(bytes_list)
+        is "br" then return compress_pkg::unbrotli_str(bytes_list)
+        is "brotli" then return compress_pkg::unbrotli_str(bytes_list)
+        is "deflate" then return compress_pkg::inflate_str(bytes_list)
+        is "zstd" then return compress_pkg::unzstd_str(bytes_list)
+        is "identity" then return compress_pkg::bytes_to_string(bytes_list)
+        else return null
     end
 end
 
-# Checks if an encoding is supported by the compression engine
+## Checks if an encoding is supported by the compression engine.
 pub function http_is_encoding_supported(enc)
     let e = lower(trim(enc))
     return e == "gzip" or e == "br" or e == "brotli" or e == "deflate" or e == "zstd" or e == "identity"
 end
 
-# Selects best matching compression encoding from an Accept-Encoding header string
-# In order of web compression efficiency: br > zstd > gzip > deflate
-# Returns selected encoding name, or "" if none matched
+## Selects best matching compression encoding from an Accept-Encoding header string.
+## In order of web compression efficiency: br > zstd > gzip > deflate.
+## Returns selected encoding name, or "" if none matched.
 pub function http_negotiate_encoding(accept_encoding_header)
     if accept_encoding_header is null or len(accept_encoding_header) == 0
         return ""

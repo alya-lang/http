@@ -1,19 +1,18 @@
-# RFC 6455 WebSocket Handshake & Cryptographic Key Resolution
-# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+## RFC 6455 WebSocket Handshake & Cryptographic Key Resolution.
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
 import "std/str"
 import "crypto" as crypto
-import "../types.alya"
 import "../core/headers.alya"
 
-# RFC 6455 Magic GUID constant
+## RFC 6455 Magic GUID constant.
 pub const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 # ═══════════════════════════════════════════════════════════════
 # Public WebSocket Handshake API
 # ═══════════════════════════════════════════════════════════════
 
-# Computes the RFC 6455 Sec-WebSocket-Accept token from the client key
+## Computes the RFC 6455 Sec-WebSocket-Accept token from the client key.
 pub function ws_accept_key(sec_key)
     if sec_key is null or len(sec_key) == 0
         return ""
@@ -30,7 +29,7 @@ pub function ws_accept_key(sec_key)
     return base64_encode_bytes(sha1_digest)
 end
 
-# Determines whether the given HttpRequest is a valid WebSocket upgrade request
+## Determines whether the given HttpRequest is a valid WebSocket upgrade request.
 pub function ws_is_upgrade_request(req)
     if req is null or req.headers is null
         return 0
@@ -50,7 +49,7 @@ pub function ws_is_upgrade_request(req)
     return 1
 end
 
-# Builds the HTTP 101 Switching Protocols handshake wire response
+## Builds the HTTP 101 Switching Protocols handshake wire response.
 pub function ws_handshake_response(req, subprotocol = "")
     let sec_key = header_get(req.headers, "Sec-WebSocket-Key")
     let accept_key = ws_accept_key(sec_key)

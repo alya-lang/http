@@ -1,10 +1,10 @@
-# HTTP Router Implementation
-# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+## HTTP Router Implementation.
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
 import "../types.alya"
 import "./route.alya"
 
-# Creates a new HttpRouter instance
+## Creates a new HttpRouter instance.
 pub function router_new(not_found_action = "not_found")
     return HttpRouter {
         routes: [],
@@ -12,7 +12,7 @@ pub function router_new(not_found_action = "not_found")
     }
 end
 
-# Adds a new route rule to the router
+## Adds a new route rule to the router.
 pub function router_add(r, method, pattern, action)
     if r is null
         return null
@@ -22,52 +22,52 @@ pub function router_add(r, method, pattern, action)
     return r
 end
 
-# Registers a GET route
+## Registers a GET route.
 pub function router_get(r, pattern, action)
     return router_add(r, "GET", pattern, action)
 end
 
-# Registers a POST route
+## Registers a POST route.
 pub function router_post(r, pattern, action)
     return router_add(r, "POST", pattern, action)
 end
 
-# Registers a PUT route
+## Registers a PUT route.
 pub function router_put(r, pattern, action)
     return router_add(r, "PUT", pattern, action)
 end
 
-# Registers a DELETE route
+## Registers a DELETE route.
 pub function router_delete(r, pattern, action)
     return router_add(r, "DELETE", pattern, action)
 end
 
-# Registers a PATCH route
+## Registers a PATCH route.
 pub function router_patch(r, pattern, action)
     return router_add(r, "PATCH", pattern, action)
 end
 
-# Registers a HEAD route
+## Registers a HEAD route.
 pub function router_head(r, pattern, action)
     return router_add(r, "HEAD", pattern, action)
 end
 
-# Registers an OPTIONS route
+## Registers an OPTIONS route.
 pub function router_options(r, pattern, action)
     return router_add(r, "OPTIONS", pattern, action)
 end
 
-# Registers a QUERY route (IETF safe method with request body)
+## Registers a QUERY route (IETF safe method with request body).
 pub function router_query(r, pattern, action)
     return router_add(r, "QUERY", pattern, action)
 end
 
-# Registers a route matching ANY HTTP method
+## Registers a route matching ANY HTTP method.
 pub function router_any(r, pattern, action)
     return router_add(r, "ANY", pattern, action)
 end
 
-# Joins prefix and path pattern cleanly (e.g. "/api" + "/users/:id" -> "/api/users/:id")
+## Joins prefix and path pattern cleanly (e.g. "/api" + "/users/:id" -> "/api/users/:id").
 pub function _router_join_prefix(prefix, pattern)
     if prefix is null or prefix == "" or prefix == "/"
         return pattern
@@ -86,13 +86,13 @@ pub function _router_join_prefix(prefix, pattern)
     return p + "/" + pat
 end
 
-# Adds a route under a group prefix
+## Adds a route under a group prefix.
 pub function router_group_add(r, prefix, method, pattern, action)
     let full_pattern = _router_join_prefix(prefix, pattern)
     return router_add(r, method, full_pattern, action)
 end
 
-# Helper to check if array contains item
+## Helper to check if array contains item.
 pub function _arr_has(arr, item)
     let i = 0
     while i < len(arr)
@@ -104,8 +104,8 @@ pub function _arr_has(arr, item)
     return 0
 end
 
-# Matches a request method and path against registered routes
-# Returns a RouteMatch struct
+## Matches a request method and path against registered routes.
+## Returns a RouteMatch struct.
 pub function router_match(r, method, path)
     if r is null
         return RouteMatch(0, "not_found", "", {}, 404, [])
@@ -113,22 +113,15 @@ pub function router_match(r, method, path)
 
     let raw_m = upper(trim(method))
     let req_method = "GET"
-    if raw_m == "GET"
-        req_method = "GET"
-    elif raw_m == "POST"
-        req_method = "POST"
-    elif raw_m == "PUT"
-        req_method = "PUT"
-    elif raw_m == "DELETE"
-        req_method = "DELETE"
-    elif raw_m == "PATCH"
-        req_method = "PATCH"
-    elif raw_m == "HEAD"
-        req_method = "HEAD"
-    elif raw_m == "OPTIONS"
-        req_method = "OPTIONS"
-    else
-        req_method = raw_m
+    when raw_m
+        is "GET" then req_method = "GET"
+        is "POST" then req_method = "POST"
+        is "PUT" then req_method = "PUT"
+        is "DELETE" then req_method = "DELETE"
+        is "PATCH" then req_method = "PATCH"
+        is "HEAD" then req_method = "HEAD"
+        is "OPTIONS" then req_method = "OPTIONS"
+        else req_method = raw_m
     end
     let req_segs = route_split_path(path)
     let allowed_methods = []

@@ -59,6 +59,19 @@ function main()
     runner_assert_eq(r, http::http_is_error(500), 1, "500 is error")
     runner_assert_eq(r, http::http_is_error(200), 0, "200 is not error")
 
+    # Status constants & HttpStatus enum
+    runner_assert_eq(r, http::STATUS_OK, 200, "STATUS_OK is 200")
+    runner_assert_eq(r, http::STATUS_NOT_FOUND, 404, "STATUS_NOT_FOUND is 404")
+    runner_assert_eq(r, http::HttpStatus.Ok, 200, "HttpStatus.Ok is 200")
+    runner_assert_eq(r, http::HttpStatus.NotFound, 404, "HttpStatus.NotFound is 404")
+    runner_assert_eq(r, http::HttpStatus.InternalServerError, 500, "HttpStatus.InternalServerError is 500")
+
+    # Enums from types
+    runner_assert_eq(r, http::HttpMethod.Get, 1, "HttpMethod.Get is 1")
+    runner_assert_eq(r, http::HttpMethod.Post, 2, "HttpMethod.Post is 2")
+    runner_assert_eq(r, http::SameSite.Lax, 2, "SameSite.Lax is 2")
+    runner_assert_eq(r, http::HttpVersion.Http11, 2, "HttpVersion.Http11 is 2")
+
     let failed = runner_summary(r)
     if failed > 0
         exit(1)

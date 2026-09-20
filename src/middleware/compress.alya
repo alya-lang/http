@@ -1,17 +1,16 @@
-# HTTP Compression Middleware
-# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+## HTTP Compression Middleware.
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
-import "../types.alya"
 import "../core/headers.alya"
 import "../core/compression.alya"
 
-# Configuration for response compression middleware
+## Configuration for response compression middleware.
 pub struct CompressionConfig
     min_length
     encodings
 end
 
-# Creates a new CompressionConfig struct with sensible defaults
+## Creates a new CompressionConfig struct with sensible defaults.
 pub function compression_config_new(min_length = 256)
     return CompressionConfig {
         min_length: min_length,
@@ -19,8 +18,8 @@ pub function compression_config_new(min_length = 256)
     }
 end
 
-# Applies HTTP compression to HttpContext response based on request Accept-Encoding
-# Returns 1 if compression was applied, 0 otherwise
+## Applies HTTP compression to HttpContext response based on request Accept-Encoding.
+## Returns 1 if compression was applied, 0 otherwise.
 pub function mw_apply_compression(ctx, config = null)
     if ctx is null or ctx.res is null or ctx.req is null
         return 0

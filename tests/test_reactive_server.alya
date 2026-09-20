@@ -19,11 +19,11 @@ function handle_post_echo(ctx)
     return http::ctx_text(ctx, "ECHO:" + body, 200)
 end
 
-function handle_ws_msg(conn, msg, is_bin)
+function handle_ws_msg(conn, msg, _is_bin)
     http::ws_send(conn, "WSECHO:" + msg)
 end
 
-function handle_ws_session(ws, req)
+function handle_ws_session(ws, _req)
     http::ws_on_message(ws, handle_ws_msg)
 end
 

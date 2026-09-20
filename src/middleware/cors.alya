@@ -1,9 +1,9 @@
-# CORS (Cross-Origin Resource Sharing) Middleware
-# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+## CORS (Cross-Origin Resource Sharing) Middleware.
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
-import "../types.alya"
 import "../core/headers.alya"
 
+## Configuration options for Cross-Origin Resource Sharing (CORS).
 pub struct CorsConfig
     allow_origin
     allow_methods
@@ -12,7 +12,7 @@ pub struct CorsConfig
     max_age
 end
 
-# Creates a new CorsConfig struct with sensible defaults
+## Creates a new CorsConfig struct with sensible defaults.
 pub function cors_config_new(origin = "*", methods = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH, QUERY", headers = "Content-Type, Authorization, X-Requested-With", credentials = 0, max_age = 86400)
     return CorsConfig {
         allow_origin: origin,
@@ -23,8 +23,8 @@ pub function cors_config_new(origin = "*", methods = "GET, POST, PUT, DELETE, OP
     }
 end
 
-# Applies CORS headers to HttpContext and handles preflight OPTIONS requests
-# Returns 1 if request was preflight and aborted, 0 if request should continue
+## Applies CORS headers to HttpContext and handles preflight OPTIONS requests.
+## Returns 1 if request was preflight and aborted, 0 if request should continue.
 pub function mw_apply_cors(ctx, config = null)
     if ctx is null
         return 0

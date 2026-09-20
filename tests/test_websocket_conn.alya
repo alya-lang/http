@@ -25,7 +25,7 @@ struct TestStore
     closed_code
     closed_reason
 end
-function handle_msg(conn, msg, is_bin)
+function handle_msg(conn, msg, _is_bin)
     let s = conn.data
     push(s.messages, msg)
 end
