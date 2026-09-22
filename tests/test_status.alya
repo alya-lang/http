@@ -70,6 +70,7 @@ function main()
     # Enums from types
     runner_assert_eq(r, http::HttpMethod.Get, 1, "HttpMethod.Get is 1")
     runner_assert_eq(r, http::HttpMethod.Post, 2, "HttpMethod.Post is 2")
+    runner_assert_eq(r, http::HttpMethod.Query, 10, "HttpMethod.Query is 10")
     runner_assert_eq(r, http::SameSite.Lax, 2, "SameSite.Lax is 2")
     runner_assert_eq(r, http::HttpVersion.Http11, 2, "HttpVersion.Http11 is 2")
 

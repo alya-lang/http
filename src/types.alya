@@ -12,6 +12,7 @@ pub enum HttpMethod
     Options = 7
     Connect = 8
     Trace = 9
+    Query = 10
 end
 
 ## SameSite cookie policy attribute options.
