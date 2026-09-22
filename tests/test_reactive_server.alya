@@ -1,4 +1,5 @@
-# Test Reactive HTTP & WebSocket Server Integration over EventLoop
+## Test Reactive HTTP & WebSocket Server Integration over EventLoop
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 import "std/test"
 import "std/net" as net
 import "event" as ev

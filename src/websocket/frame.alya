@@ -13,121 +13,141 @@ end
 
 # Represents a parsed or pending RFC 6455 WebSocket Frame
 pub struct WebSocketFrame
-    fin
-    opcode
-    masked
+    fin: int
+    opcode: int
+    masked: int
     payload
     mask_key
-    len
+    len: int
 end
 
 # ═══════════════════════════════════════════════════════════════
 # Frame Inspector Functions
 # ═══════════════════════════════════════════════════════════════
 
-pub function ws_frame_is_final(frame)
+## Returns 1 when a frame has the final fragment flag.
+pub function ws_frame_is_final(frame) -> int
     if frame is null
         return 0
     end
     return frame.fin == 1
 end
 
-pub function ws_frame_is_text(frame)
+## Returns 1 for text frames.
+pub function ws_frame_is_text(frame) -> int
     if frame is null
         return 0
     end
     return frame.opcode == WebSocketOpCode.Text
 end
 
-pub function ws_frame_is_binary(frame)
+## Returns 1 for binary frames.
+pub function ws_frame_is_binary(frame) -> int
     if frame is null
         return 0
     end
     return frame.opcode == WebSocketOpCode.Binary
 end
 
-pub function ws_frame_is_close(frame)
+## Returns 1 for close frames.
+pub function ws_frame_is_close(frame) -> int
     if frame is null
         return 0
     end
     return frame.opcode == WebSocketOpCode.Close
 end
 
-pub function ws_frame_is_ping(frame)
+## Returns 1 for ping frames.
+pub function ws_frame_is_ping(frame) -> int
     if frame is null
         return 0
     end
     return frame.opcode == WebSocketOpCode.Ping
 end
 
-pub function ws_frame_is_pong(frame)
+## Returns 1 for pong frames.
+pub function ws_frame_is_pong(frame) -> int
     if frame is null
         return 0
     end
     return frame.opcode == WebSocketOpCode.Pong
 end
 
-pub function ws_frame_is_control(frame)
+## Returns 1 for control frames.
+pub function ws_frame_is_control(frame) -> int
     if frame is null
         return 0
     end
     return frame.opcode >= 8
 end
 
-# Standalone aliases for dynamic method calls
-pub function is_final(frame)
+## Standalone aliases for dynamic method calls
+pub function is_final(frame) -> int
     return ws_frame_is_final(frame)
 end
 
-pub function is_text(frame)
+## Alias check for text frames.
+pub function is_text(frame) -> int
     return ws_frame_is_text(frame)
 end
 
-pub function is_binary(frame)
+## Alias check for binary frames.
+pub function is_binary(frame) -> int
     return ws_frame_is_binary(frame)
 end
 
-pub function is_close(frame)
+## Alias check for close frames.
+pub function is_close(frame) -> int
     return ws_frame_is_close(frame)
 end
 
-pub function is_ping(frame)
+## Alias check for ping frames.
+pub function is_ping(frame) -> int
     return ws_frame_is_ping(frame)
 end
 
-pub function is_pong(frame)
+## Alias check for pong frames.
+pub function is_pong(frame) -> int
     return ws_frame_is_pong(frame)
 end
 
-pub function is_control(frame)
+## Alias check for control frames.
+pub function is_control(frame) -> int
     return ws_frame_is_control(frame)
 end
 
-pub function WebSocketFrame.is_final(self)
+## Returns 1 when this frame is final.
+pub function WebSocketFrame.is_final(self: WebSocketFrame) -> int
     return ws_frame_is_final(self)
 end
 
-pub function WebSocketFrame.is_text(self)
+## Returns 1 when this frame carries text.
+pub function WebSocketFrame.is_text(self: WebSocketFrame) -> int
     return ws_frame_is_text(self)
 end
 
-pub function WebSocketFrame.is_binary(self)
+## Returns 1 when this frame carries binary data.
+pub function WebSocketFrame.is_binary(self: WebSocketFrame) -> int
     return ws_frame_is_binary(self)
 end
 
-pub function WebSocketFrame.is_close(self)
+## Returns 1 when this frame closes the connection.
+pub function WebSocketFrame.is_close(self: WebSocketFrame) -> int
     return ws_frame_is_close(self)
 end
 
-pub function WebSocketFrame.is_ping(self)
+## Returns 1 when this frame is a ping.
+pub function WebSocketFrame.is_ping(self: WebSocketFrame) -> int
     return ws_frame_is_ping(self)
 end
 
-pub function WebSocketFrame.is_pong(self)
+## Returns 1 when this frame is a pong.
+pub function WebSocketFrame.is_pong(self: WebSocketFrame) -> int
     return ws_frame_is_pong(self)
 end
 
-pub function WebSocketFrame.is_control(self)
+## Returns 1 when this frame is a control frame.
+pub function WebSocketFrame.is_control(self: WebSocketFrame) -> int
     return ws_frame_is_control(self)
 end
 
@@ -135,8 +155,8 @@ end
 # Frame Construction & Serialization
 # ═══════════════════════════════════════════════════════════════
 
-# Creates an unencoded WebSocketFrame struct
-pub function ws_frame_create(opcode, payload = "", is_final = 1, masked = 0, mask_key = null)
+## Creates an unencoded WebSocketFrame struct
+pub function ws_frame_create(opcode: int, payload: string = "", is_final: int = 1, masked: int = 0, mask_key = null)
     let plen = 0
     if payload is not null
         plen = len(payload)
@@ -153,8 +173,8 @@ pub function ws_frame_create(opcode, payload = "", is_final = 1, masked = 0, mas
     }
 end
 
-# Serializes an RFC 6455 WebSocket frame into wire bytes
-pub function ws_frame_encode(opcode, payload = "", is_final = 1, mask = 0, mask_key = null)
+## Serializes an RFC 6455 WebSocket frame into wire bytes
+pub function ws_frame_encode(opcode: int, payload: string = "", is_final: int = 1, mask: int = 0, mask_key = null)
     if payload is null
         payload = ""
     end
@@ -223,18 +243,18 @@ pub function ws_frame_encode(opcode, payload = "", is_final = 1, mask = 0, mask_
     return wire
 end
 
-# Encodes a UTF-8 text message frame (OpCode 1)
-pub function ws_encode_text(text, mask = 0, mask_key = null)
+## Encodes a UTF-8 text message frame (OpCode 1)
+pub function ws_encode_text(text: string, mask: int = 0, mask_key = null)
     return ws_frame_encode(WebSocketOpCode.Text, text, 1, mask, mask_key)
 end
 
-# Encodes a binary message frame (OpCode 2)
-pub function ws_encode_binary(data, mask = 0, mask_key = null)
+## Encodes a binary message frame (OpCode 2)
+pub function ws_encode_binary(data, mask: int = 0, mask_key = null)
     return ws_frame_encode(WebSocketOpCode.Binary, data, 1, mask, mask_key)
 end
 
-# Encodes a close frame (OpCode 8) with optional status code and reason
-pub function ws_encode_close(code = 1000, reason = "", mask = 0, mask_key = null)
+## Encodes a close frame (OpCode 8) with optional status code and reason
+pub function ws_encode_close(code: int = 1000, reason: string = "", mask: int = 0, mask_key = null)
     let payload = ""
     if code > 0
         payload = chr(bit_and(bit_shr(code, 8), 255)) + chr(bit_and(code, 255))
@@ -245,13 +265,13 @@ pub function ws_encode_close(code = 1000, reason = "", mask = 0, mask_key = null
     return ws_frame_encode(WebSocketOpCode.Close, payload, 1, mask, mask_key)
 end
 
-# Encodes a ping frame (OpCode 9)
-pub function ws_encode_ping(data = "", mask = 0, mask_key = null)
+## Encodes a ping frame (OpCode 9)
+pub function ws_encode_ping(data: string = "", mask: int = 0, mask_key = null)
     return ws_frame_encode(WebSocketOpCode.Ping, data, 1, mask, mask_key)
 end
 
-# Encodes a pong frame (OpCode 10)
-pub function ws_encode_pong(data = "", mask = 0, mask_key = null)
+## Encodes a pong frame (OpCode 10)
+pub function ws_encode_pong(data: string = "", mask: int = 0, mask_key = null)
     return ws_frame_encode(WebSocketOpCode.Pong, data, 1, mask, mask_key)
 end
 
@@ -261,8 +281,8 @@ end
 
 # Attempts to parse the next RFC 6455 WebSocket frame from raw_data starting at offset.
 # Returns [WebSocketFrame, bytes_consumed].
-# If incomplete, returns [null, 0].
-pub function ws_frame_parse(raw_data, offset = 0)
+## If incomplete, returns [null, 0].
+pub function ws_frame_parse(raw_data, offset: int = 0)
     if raw_data is null
         return [null, 0]
     end

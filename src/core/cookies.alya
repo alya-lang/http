@@ -1,15 +1,19 @@
+## # http/core/cookies
+##
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang).
+
 # HTTP Cookie Parsing and Formatting
 # Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
 import "../types.alya"
 
-# Creates a new HttpCookie struct
-pub function cookie_new(name, value, path = "/", max_age = -1, http_only = 0, secure = 0, same_site = "Lax")
+## Creates a new HttpCookie struct
+pub function cookie_new(name: string, value: string, path: string = "/", max_age: int = -1, http_only: int = 0, secure: int = 0, same_site: string = "Lax")
     return cookie_create(name, value, path, max_age, http_only, secure, same_site)
 end
 
-# Formats an HttpCookie struct into a valid Set-Cookie header value
-pub function cookie_format(c: HttpCookie)
+## Formats an HttpCookie struct into a valid Set-Cookie header value
+pub function cookie_format(c: HttpCookie) -> string
     if c is null
         return ""
     end
@@ -46,8 +50,8 @@ pub function cookie_format(c: HttpCookie)
     return res
 end
 
-# Internal helper to find substring
-pub function _cookie_find(s, target, start_idx = 0)
+## Internal helper to find substring
+pub function _cookie_find(s, target, start_idx: int = 0)
     let slen = len(s)
     let tlen = len(target)
     if tlen == 0
@@ -63,7 +67,7 @@ pub function _cookie_find(s, target, start_idx = 0)
     return -1
 end
 
-# Parses incoming 'Cookie' header into a Map of name -> value
+## Parses incoming 'Cookie' header into a Map of name -> value
 pub function cookie_parse(raw)
     if raw is null or len(raw) == 0
         return {}

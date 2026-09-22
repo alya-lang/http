@@ -1,4 +1,5 @@
-# Test High-Level WebSocket Connection Driver
+## Test High-Level WebSocket Connection Driver
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 import "std/test"
 import "../src/websocket/frame.alya"
 import "../src/websocket/connection.alya"

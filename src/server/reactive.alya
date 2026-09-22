@@ -29,14 +29,26 @@ pub function ws_connection_from_stream(stream: TcpStream, is_server = 1) -> WebS
 end
 
 ## Represents the per-connection state of a reactive HTTP/WebSocket client.
+##
+## ### Fields
+## - `stream`: Connection stream handle.
+## - `server`: Owning server handle.
+## - `buffer`: Accumulated byte buffer value.
+## - `headers_parsed`: `1` once headers are complete, `0` otherwise.
+## - `req`: Partial request value.
+## - `content_length`: Declared body length integer.
+## - `is_websocket`: `1` for upgraded connections, `0` otherwise.
+## - `ws_conn`: WebSocket connection handle (or null).
+## - `on_request_cb`: Request callback (or null).
+## - `on_websocket_cb`: Upgrade callback (or null).
 pub struct ReactiveClientState
     stream
     server
     buffer
-    headers_parsed
+    headers_parsed: int
     req
-    content_length
-    is_websocket
+    content_length: int
+    is_websocket: int
     ws_conn
     on_request_cb
     on_websocket_cb
@@ -283,11 +295,11 @@ pub function server_close_reactive(srv: HttpServer)
 end
 
 ## Struct method for HttpServer.use_event_loop.
-pub function HttpServer.use_event_loop(self, loop, on_request = null, on_websocket = null)
+pub function HttpServer.use_event_loop(self: HttpServer, loop, on_request = null, on_websocket = null)
     return server_use_event_loop(self, loop, on_request, on_websocket)
 end
 
 ## Struct method for HttpServer.close_reactive.
-pub function HttpServer.close_reactive(self)
+pub function HttpServer.close_reactive(self: HttpServer)
     return server_close_reactive(self)
 end

@@ -1,68 +1,74 @@
-# HTTP Route Groups
-# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+## # http/router/group
+##
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang).
 
 import "./router.alya"
 
+## Route group binding a router with a common path prefix.
+##
+## ### Fields
+## - `router`: Parent router value.
+## - `prefix`: Common path prefix string.
 pub struct RouteGroup
-    router
-    prefix
+    router,
+    prefix: string
 end
 
-# Creates a new RouteGroup attached to a router
-pub function group_new(router, prefix)
+## Creates a new RouteGroup attached to a router
+pub function group_new(router, prefix: string)
     return RouteGroup {
         router: router,
         prefix: prefix
     }
 end
 
-# Registers a GET route in this group
-pub function group_get(g, pattern, action)
+## Registers a GET route in this group
+pub function group_get(g, pattern: string, action)
     return router_group_add(g.router, g.prefix, "GET", pattern, action)
 end
 
-# Registers a POST route in this group
-pub function group_post(g, pattern, action)
+## Registers a POST route in this group
+pub function group_post(g, pattern: string, action)
     return router_group_add(g.router, g.prefix, "POST", pattern, action)
 end
 
-# Registers a PUT route in this group
-pub function group_put(g, pattern, action)
+## Registers a PUT route in this group
+pub function group_put(g, pattern: string, action)
     return router_group_add(g.router, g.prefix, "PUT", pattern, action)
 end
 
-# Registers a DELETE route in this group
-pub function group_delete(g, pattern, action)
+## Registers a DELETE route in this group
+pub function group_delete(g, pattern: string, action)
     return router_group_add(g.router, g.prefix, "DELETE", pattern, action)
 end
 
-# Registers a PATCH route in this group
-pub function group_patch(g, pattern, action)
+## Registers a PATCH route in this group
+pub function group_patch(g, pattern: string, action)
     return router_group_add(g.router, g.prefix, "PATCH", pattern, action)
 end
 
-# Registers a HEAD route in this group
-pub function group_head(g, pattern, action)
+## Registers a HEAD route in this group
+pub function group_head(g, pattern: string, action)
     return router_group_add(g.router, g.prefix, "HEAD", pattern, action)
 end
 
-# Registers an OPTIONS route in this group
-pub function group_options(g, pattern, action)
+## Registers an OPTIONS route in this group
+pub function group_options(g, pattern: string, action)
     return router_group_add(g.router, g.prefix, "OPTIONS", pattern, action)
 end
 
-# Registers a QUERY route in this group (IETF safe method with request body)
-pub function group_query(g, pattern, action)
+## Registers a QUERY route in this group (IETF safe method with request body)
+pub function group_query(g, pattern: string, action)
     return router_group_add(g.router, g.prefix, "QUERY", pattern, action)
 end
 
-# Registers an ANY route in this group
-pub function group_any(g, pattern, action)
+## Registers an ANY route in this group
+pub function group_any(g, pattern: string, action)
     return router_group_add(g.router, g.prefix, "ANY", pattern, action)
 end
 
-# Creates a nested sub-group under this group prefix
-pub function group_subgroup(g, sub_prefix)
+## Creates a nested sub-group under this group prefix
+pub function group_subgroup(g, sub_prefix: string)
     let full_prefix = _router_join_prefix(g.prefix, sub_prefix)
     return group_new(g.router, full_prefix)
 end

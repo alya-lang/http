@@ -1,3 +1,7 @@
+## # http/client/client
+##
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang).
+
 # HTTP Client Struct and Request Runner
 # Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
@@ -8,8 +12,8 @@ import "../core/status.alya"
 import "../core/headers.alya"
 import "../core/protocol.alya"
 
-# Creates a new HttpClient instance
-pub function client_new(timeout_ms = 10000, follow_redirects = 1, max_redirects = 5)
+## Creates a new HttpClient instance
+pub function client_new(timeout_ms: int = 10000, follow_redirects: int = 1, max_redirects: int = 5)
     return HttpClient {
         timeout_ms: timeout_ms,
         headers: {},
@@ -18,16 +22,16 @@ pub function client_new(timeout_ms = 10000, follow_redirects = 1, max_redirects 
     }
 end
 
-# Sets a default header on the client
-pub function client_set_header(client, key, val)
+## Sets a default header on the client
+pub function client_set_header(client, key: string, val)
     if client is not null
         header_set(client.headers, key, val)
     end
     return client
 end
 
-# Internal HTTPS bridge via system curl
-pub function _client_curl_bridge(method, url_str, headers, body, timeout_ms, follow_redirects, max_redirects)
+## Internal HTTPS bridge via system curl
+pub function _client_curl_bridge(method, url_str: string, headers, body, timeout_ms: int, follow_redirects: int, max_redirects: int)
     let tmp_out = "temp_alya_http_out_" + str(clock_ms()) + ".tmp"
     let tmp_body = "temp_alya_http_body_" + str(clock_ms()) + ".tmp"
     let sec_timeout = to_int(timeout_ms / 1000)
@@ -77,13 +81,13 @@ pub function _client_curl_bridge(method, url_str, headers, body, timeout_ms, fol
     return http_parse_response(raw_resp)
 end
 
-# Performs an HTTP request using raw TCP socket or HTTPS bridge
-pub function client_execute(client, method, url_str, extra_headers = null, body = "")
+## Performs an HTTP request using raw TCP socket or HTTPS bridge
+pub function client_execute(client, method, url_str: string, extra_headers = null, body: string = "")
     let parsed = url_pkg::url_parse(url_str)
     let host = parsed.host
     let scheme = parsed.scheme
     if host == "" or (scheme != "http" and scheme != "https")
-        return HttpResponse(-1, "Invalid URL host: " + url_str, {}, "", [])
+        return HttpResponse { status_code: -1, status_text: "Invalid URL host: {url_str}", headers: {}, body: "", cookies: [] }
     end
 
     let p_str = url_pkg::url_effective_port(parsed)
@@ -139,10 +143,10 @@ pub function client_execute(client, method, url_str, extra_headers = null, body 
     try
         sock = net::tcp_connect(host, effective_port)
     catch e
-        return HttpResponse(-1, "Connection failed to " + host + ":" + str(effective_port), {}, "", [])
+        return HttpResponse { status_code: -1, status_text: "Connection failed to {host}:{effective_port}", headers: {}, body: "", cookies: [] }
     end
     if sock < 0
-        return HttpResponse(-1, "Connection failed to " + host + ":" + str(effective_port), {}, "", [])
+        return HttpResponse { status_code: -1, status_text: "Connection failed to {host}:{effective_port}", headers: {}, body: "", cookies: [] }
     end
 
     net::tcp_set_timeout(sock, timeout_ms)

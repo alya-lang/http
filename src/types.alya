@@ -40,96 +40,179 @@ pub enum WebSocketOpcode
 end
 
 ## Represents an incoming or outgoing HTTP Cookie.
+##
+## ### Fields
+## - `name`: Cookie name string.
+## - `value`: Cookie value string.
+## - `path`: Scope path string.
+## - `domain`: Scope domain string.
+## - `max_age`: Lifetime seconds integer.
+## - `expires`: Expiry timestamp string.
+## - `secure`: `1` restricts to HTTPS, `0` otherwise.
+## - `http_only`: `1` hides from scripts, `0` otherwise.
+## - `same_site`: SameSite policy string.
 pub struct HttpCookie
-    name
-    value
-    path
-    domain
-    max_age
-    expires
-    secure
-    http_only
-    same_site
+    name: string
+    value: string
+    path: string
+    domain: string
+    max_age: int
+    expires: string
+    secure: int
+    http_only: int
+    same_site: string
 end
 
 ## Represents an HTTP request.
+##
+## ### Fields
+## - `method`: Method value (string or `HttpMethod`).
+## - `url`: Full URL string.
+## - `path`: Path string.
+## - `query`: Raw query string.
+## - `query_params`: Parsed query map.
+## - `headers`: Header map.
+## - `body`: Body payload value.
+## - `params`: Route parameter map.
+## - `cookies`: Cookie map.
+## - `remote_addr`: Client address string.
 pub struct HttpRequest
-    method
-    url
-    path
-    query
-    query_params
-    headers
-    body
-    params
-    cookies
-    remote_addr
+    method,
+    url: string,
+    path: string,
+    query: string,
+    query_params: map,
+    headers: map,
+    body,
+    params: map,
+    cookies: map,
+    remote_addr: string
 end
 
 ## Represents an HTTP response.
+##
+## ### Fields
+## - `status_code`: Numeric status integer.
+## - `status_text`: Reason phrase string.
+## - `headers`: Header map.
+## - `body`: Body payload value.
+## - `cookies`: Cookie array.
 pub struct HttpResponse
-    status_code
-    status_text
-    headers
-    body
-    cookies
+    status_code: int,
+    status_text: string,
+    headers: map,
+    body,
+    cookies: array
 end
 
 ## Represents a route match result from Router.
+##
+## ### Fields
+## - `found`: `1` on match, `0` otherwise.
+## - `action`: Route action value.
+## - `route`: Matched pattern string.
+## - `params`: Captured parameter map.
+## - `status`: Match status integer.
+## - `allowed_methods`: Permitted method array.
 pub struct RouteMatch
-    found
-    action
-    route
-    params
-    status
-    allowed_methods
+    found: int,
+    action,
+    route: string,
+    params: map,
+    status: int,
+    allowed_methods: array
 end
 
 ## Represents the request/response lifecycle context.
+##
+## ### Fields
+## - `req`: Active `HttpRequest` instance.
+## - `res`: Active `HttpResponse` instance.
+## - `client_sock`: Client socket integer.
+## - `aborted`: `1` when aborted, `0` otherwise.
+## - `data`: Handler payload map.
 pub struct HttpContext
     req: HttpRequest
     res: HttpResponse
-    client_sock
-    aborted
-    data
+    client_sock: int
+    aborted: int
+    data: map
 end
 
 ## Represents an HTTP Route definition.
+##
+## ### Fields
+## - `method`: Method value (string or `HttpMethod`).
+## - `action`: Handler action value.
+## - `pattern`: Route pattern string.
+## - `segments`: Pattern segment array.
 pub struct HttpRoute
-    method
-    action
-    pattern
-    segments
+    method,
+    action,
+    pattern: string,
+    segments: array
 end
 
 ## Represents the HTTP Router.
+##
+## ### Fields
+## - `routes`: `HttpRoute` array.
+## - `not_found_action`: Fallback action value.
 pub struct HttpRouter
-    routes
+    routes: array,
     not_found_action
 end
 
 ## Represents the HTTP Server instance.
+##
+## ### Fields
+## - `port`: Listen port integer.
+## - `host`: Bind host string.
+## - `server_sock`: Listen socket integer.
+## - `running`: `1` while serving, `0` otherwise.
+## - `router`: Active `HttpRouter` instance.
+## - `options`: Middleware option map.
+## - `loop`: Event loop handle (or null).
+## - `tcp_server`: Native server handle (or null).
 pub struct HttpServer
-    port
-    host
-    server_sock
-    running
-    router
-    options
-    loop
+    port: int,
+    host: string,
+    server_sock: int,
+    running: int,
+    router: HttpRouter,
+    options: map,
+    loop,
     tcp_server
 end
 
 ## Represents the HTTP Client configuration.
+##
+## ### Fields
+## - `timeout_ms`: Request timeout integer.
+## - `headers`: Default header map.
+## - `follow_redirects`: `1` follows redirects, `0` otherwise.
+## - `max_redirects`: Redirect hop limit integer.
 pub struct HttpClient
-    timeout_ms
-    headers
-    follow_redirects
-    max_redirects
+    timeout_ms: int,
+    headers: map,
+    follow_redirects: int,
+    max_redirects: int
 end
 
 ## Factory for creating an HttpCookie instance.
-pub function cookie_create(name, value, path = "/", max_age = -1, http_only = 0, secure = 0, same_site = "Lax")
+##
+## ### Parameters
+## - `name`: Cookie name string.
+## - `value`: Cookie value string.
+## - `path`: Scope path. Defaults to `"/"`.
+## - `max_age`: Lifetime seconds. Defaults to `-1`.
+## - `http_only`: `1` hides from scripts. Defaults to `0`.
+## - `secure`: `1` restricts to HTTPS. Defaults to `0`.
+## - `same_site`: SameSite policy. Defaults to `"Lax"`.
+##
+## ### Returns
+## The new `HttpCookie` instance.
+pub function cookie_create(name: string, value: string, path: string = "/", max_age: int = -1, http_only: int = 0, secure: int = 0, same_site: string = "Lax") -> HttpCookie
     return HttpCookie {
         name: name,
         value: value,
@@ -144,7 +227,21 @@ pub function cookie_create(name, value, path = "/", max_age = -1, http_only = 0,
 end
 
 ## Factory for creating an HttpRequest instance.
-pub function request_create(method, path, query = "", headers = null, body = "", remote_addr = "", params = null, cookies = null, query_params = null)
+##
+## ### Parameters
+## - `method`: Method value (string or `HttpMethod`).
+## - `path`: Path string.
+## - `query`: Raw query string. Defaults to `""`.
+## - `headers`: Header map (defaults to empty when null).
+## - `body`: Body payload value. Defaults to `""`.
+## - `remote_addr`: Client address. Defaults to `""`.
+## - `params`: Route parameter map (defaults to empty when null).
+## - `cookies`: Cookie map (defaults to empty when null).
+## - `query_params`: Parsed query map (defaults to empty when null).
+##
+## ### Returns
+## The new `HttpRequest` instance.
+pub function request_create(method, path: string, query: string = "", headers = null, body: string = "", remote_addr: string = "", params = null, cookies = null, query_params = null) -> HttpRequest
     if headers is null
         headers = {}
     end
@@ -176,7 +273,16 @@ pub function request_create(method, path, query = "", headers = null, body = "",
 end
 
 ## Factory for creating an HttpResponse instance.
-pub function response_create(status_code = 200, status_text = "OK", headers = null, body = "")
+##
+## ### Parameters
+## - `status_code`: Numeric status. Defaults to `200`.
+## - `status_text`: Reason phrase. Defaults to `"OK"`.
+## - `headers`: Header map (defaults to empty when null).
+## - `body`: Body payload value. Defaults to `""`.
+##
+## ### Returns
+## The new `HttpResponse` instance.
+pub function response_create(status_code: int = 200, status_text: string = "OK", headers = null, body: string = "") -> HttpResponse
     if headers is null
         headers = {}
     end
@@ -190,7 +296,15 @@ pub function response_create(status_code = 200, status_text = "OK", headers = nu
 end
 
 ## Factory for creating an HttpContext lifecycle context instance.
-pub function context_create(req, res = null, client_sock = -1)
+##
+## ### Parameters
+## - `req`: Active `HttpRequest` instance.
+## - `res`: Active `HttpResponse` (defaults to 200 OK when null).
+## - `client_sock`: Client socket. Defaults to `-1`.
+##
+## ### Returns
+## The new `HttpContext` instance.
+pub function context_create(req: HttpRequest, res = null, client_sock: int = -1) -> HttpContext
     if res is null
         res = response_create(200, "OK")
     end

@@ -1,3 +1,7 @@
+## # http/server/context
+##
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang).
+
 # HTTP Context Helpers and Response Builders
 # Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
@@ -6,13 +10,13 @@ import "../core/status.alya"
 import "../core/headers.alya"
 import "../core/cookies.alya"
 
-# Creates a new HttpContext instance
-pub function ctx_new(req: HttpRequest, res: HttpResponse = null, client_sock = -1)
+## Creates a new HttpContext instance
+pub function ctx_new(req: HttpRequest, res: HttpResponse = null, client_sock: int = -1)
     return context_create(req, res, client_sock)
 end
 
-# Sets response status code and optional status text
-pub function ctx_status(ctx: HttpContext, code, text = "")
+## Sets response status code and optional status text
+pub function ctx_status(ctx: HttpContext, code: int, text: string = "")
     if ctx is null
         return ctx
     end
@@ -29,8 +33,8 @@ pub function ctx_status(ctx: HttpContext, code, text = "")
     return ctx
 end
 
-# Sets a response header on the context
-pub function ctx_header(ctx: HttpContext, key, val)
+## Sets a response header on the context
+pub function ctx_header(ctx: HttpContext, key: string, val)
     if ctx is not null
         let res: HttpResponse = ctx.res
         if res is not null
@@ -40,8 +44,8 @@ pub function ctx_header(ctx: HttpContext, key, val)
     return ctx
 end
 
-# Retrieves a request header by case-insensitive key
-pub function ctx_get_header(ctx: HttpContext, key, default_val = "")
+## Retrieves a request header by case-insensitive key
+pub function ctx_get_header(ctx: HttpContext, key: string, default_val: string = "")
     if ctx is null
         return default_val
     end
@@ -53,8 +57,8 @@ pub function ctx_get_header(ctx: HttpContext, key, default_val = "")
     return header_get(hdrs, key, default_val)
 end
 
-# Sets a cookie to be sent with the response
-pub function ctx_cookie(ctx: HttpContext, name, val, path = "/", max_age = -1, http_only = 0, secure = 0, same_site = "Lax")
+## Sets a cookie to be sent with the response
+pub function ctx_cookie(ctx: HttpContext, name: string, val, path: string = "/", max_age: int = -1, http_only: int = 0, secure: int = 0, same_site: string = "Lax")
     if ctx is not null
         let res: HttpResponse = ctx.res
         if res is not null
@@ -66,8 +70,8 @@ pub function ctx_cookie(ctx: HttpContext, name, val, path = "/", max_age = -1, h
     return ctx
 end
 
-# Retrieves an incoming cookie value by name
-pub function ctx_get_cookie(ctx: HttpContext, name, default_val = "")
+## Retrieves an incoming cookie value by name
+pub function ctx_get_cookie(ctx: HttpContext, name: string, default_val: string = "")
     if ctx is null
         return default_val
     end
@@ -85,8 +89,8 @@ pub function ctx_get_cookie(ctx: HttpContext, name, default_val = "")
     return default_val
 end
 
-# Retrieves a matched route path parameter by name (e.g. :id)
-pub function ctx_param(ctx: HttpContext, name, default_val = "")
+## Retrieves a matched route path parameter by name (e.g. :id)
+pub function ctx_param(ctx: HttpContext, name: string, default_val: string = "")
     if ctx is null
         return default_val
     end
@@ -104,8 +108,8 @@ pub function ctx_param(ctx: HttpContext, name, default_val = "")
     return default_val
 end
 
-# Retrieves a matched route parameter parsed as integer
-pub function ctx_param_int(ctx: HttpContext, name, default_val = 0)
+## Retrieves a matched route parameter parsed as integer
+pub function ctx_param_int(ctx: HttpContext, name: string, default_val: int = 0)
     let p = ctx_param(ctx, name, "")
     if p == ""
         return default_val
@@ -113,8 +117,8 @@ pub function ctx_param_int(ctx: HttpContext, name, default_val = 0)
     return to_int(p)
 end
 
-# Retrieves a parsed query string parameter by key
-pub function ctx_query(ctx: HttpContext, name, default_val = "")
+## Retrieves a parsed query string parameter by key
+pub function ctx_query(ctx: HttpContext, name: string, default_val: string = "")
     if ctx is null
         return default_val
     end
@@ -132,7 +136,7 @@ pub function ctx_query(ctx: HttpContext, name, default_val = "")
     return default_val
 end
 
-# Retrieves the raw incoming request body
+## Retrieves the raw incoming request body
 pub function ctx_body(ctx: HttpContext)
     if ctx is null
         return ""
@@ -144,8 +148,8 @@ pub function ctx_body(ctx: HttpContext)
     return req.body
 end
 
-# Sends a plain text response
-pub function ctx_text(ctx: HttpContext, text_content, status_code = 200)
+## Sends a plain text response
+pub function ctx_text(ctx: HttpContext, text_content: string, status_code: int = 200)
     ctx_status(ctx, status_code)
     let res: HttpResponse = ctx.res
     header_set(res.headers, "Content-Type", "text/plain; charset=utf-8")
@@ -153,8 +157,8 @@ pub function ctx_text(ctx: HttpContext, text_content, status_code = 200)
     return ctx
 end
 
-# Sends a JSON response string
-pub function ctx_json(ctx: HttpContext, json_content, status_code = 200)
+## Sends a JSON response string
+pub function ctx_json(ctx: HttpContext, json_content: string, status_code: int = 200)
     ctx_status(ctx, status_code)
     let res: HttpResponse = ctx.res
     header_set(res.headers, "Content-Type", "application/json; charset=utf-8")
@@ -162,8 +166,8 @@ pub function ctx_json(ctx: HttpContext, json_content, status_code = 200)
     return ctx
 end
 
-# Sends an HTML response
-pub function ctx_html(ctx: HttpContext, html_content, status_code = 200)
+## Sends an HTML response
+pub function ctx_html(ctx: HttpContext, html_content: string, status_code: int = 200)
     ctx_status(ctx, status_code)
     let res: HttpResponse = ctx.res
     header_set(res.headers, "Content-Type", "text/html; charset=utf-8")
@@ -171,8 +175,8 @@ pub function ctx_html(ctx: HttpContext, html_content, status_code = 200)
     return ctx
 end
 
-# Sends an HTTP redirect response
-pub function ctx_redirect(ctx: HttpContext, target_url, status_code = 302)
+## Sends an HTTP redirect response
+pub function ctx_redirect(ctx: HttpContext, target_url: string, status_code: int = 302)
     ctx_status(ctx, status_code)
     let res: HttpResponse = ctx.res
     header_set(res.headers, "Location", target_url)
@@ -180,27 +184,27 @@ pub function ctx_redirect(ctx: HttpContext, target_url, status_code = 302)
     return ctx
 end
 
-# Sends a 404 Not Found response
-pub function ctx_not_found(ctx: HttpContext, message = "Not Found")
+## Sends a 404 Not Found response
+pub function ctx_not_found(ctx: HttpContext, message: string = "Not Found")
     return ctx_text(ctx, message, 404)
 end
 
-# Sends a 400 Bad Request response
-pub function ctx_bad_request(ctx: HttpContext, message = "Bad Request")
+## Sends a 400 Bad Request response
+pub function ctx_bad_request(ctx: HttpContext, message: string = "Bad Request")
     return ctx_text(ctx, message, 400)
 end
 
-# Sends a 401 Unauthorized response
-pub function ctx_unauthorized(ctx: HttpContext, message = "Unauthorized")
+## Sends a 401 Unauthorized response
+pub function ctx_unauthorized(ctx: HttpContext, message: string = "Unauthorized")
     return ctx_text(ctx, message, 401)
 end
 
-# Sends a 403 Forbidden response
-pub function ctx_forbidden(ctx: HttpContext, message = "Forbidden")
+## Sends a 403 Forbidden response
+pub function ctx_forbidden(ctx: HttpContext, message: string = "Forbidden")
     return ctx_text(ctx, message, 403)
 end
 
-# Aborts request pipeline processing
+## Aborts request pipeline processing
 pub function ctx_abort(ctx: HttpContext)
     if ctx is not null
         ctx.aborted = 1

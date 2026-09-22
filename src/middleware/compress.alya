@@ -5,13 +5,17 @@ import "../core/headers.alya"
 import "../core/compression.alya"
 
 ## Configuration for response compression middleware.
+##
+## ### Fields
+## - `min_length`: Minimum body bytes before compressing.
+## - `encodings`: Supported encoding array.
 pub struct CompressionConfig
-    min_length
+    min_length: int,
     encodings
 end
 
 ## Creates a new CompressionConfig struct with sensible defaults.
-pub function compression_config_new(min_length = 256)
+pub function compression_config_new(min_length: int = 256)
     return CompressionConfig {
         min_length: min_length,
         encodings: ["br", "zstd", "gzip", "deflate"]

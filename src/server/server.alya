@@ -1,3 +1,7 @@
+## # http/server/server
+##
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang).
+
 # HTTP Server Implementation
 # Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
@@ -13,8 +17,8 @@ import "../middleware/compress.alya"
 import "../core/compression.alya"
 import "./context.alya"
 
-# Creates a new HttpServer instance
-pub function server_new(port = 8080, host = "0.0.0.0", router = null)
+## Creates a new HttpServer instance
+pub function server_new(port: int = 8080, host: string = "0.0.0.0", router = null)
     if router is null
         router = router_new()
     end
@@ -39,36 +43,36 @@ pub function server_new(port = 8080, host = "0.0.0.0", router = null)
     }
 end
 
-# Enables CORS middleware on the server
-pub function server_enable_cors(server, origin = "*", methods = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH, QUERY", headers = "Content-Type, Authorization, X-Requested-With", credentials = 0, max_age = 86400)
+## Enables CORS middleware on the server
+pub function server_enable_cors(server, origin: string = "*", methods = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH, QUERY", headers = "Content-Type, Authorization, X-Requested-With", credentials: int = 0, max_age: int = 86400)
     server.options["cors_enabled"] = 1
     server.options["cors_config"] = cors_config_new(origin, methods, headers, credentials, max_age)
     return server
 end
 
-# Enables request logging middleware on the server
-pub function server_enable_logger(server, enabled = 1)
+## Enables request logging middleware on the server
+pub function server_enable_logger(server, enabled: int = 1)
     server.options["logger_enabled"] = enabled
     return server
 end
 
-# Enables static file serving middleware on the server
-pub function server_enable_static(server, url_prefix, local_dir)
+## Enables static file serving middleware on the server
+pub function server_enable_static(server, url_prefix: string, local_dir: string)
     server.options["static_enabled"] = 1
     server.options["static_prefix"] = url_prefix
     server.options["static_dir"] = local_dir
     return server
 end
 
-# Enables response compression middleware on the server (Brotli, Zstd, Gzip, Deflate)
-pub function server_enable_compression(server, min_length = 256)
+## Enables response compression middleware on the server (Brotli, Zstd, Gzip, Deflate)
+pub function server_enable_compression(server, min_length: int = 256)
     server.options["compression_enabled"] = 1
     server.options["compression_config"] = compression_config_new(min_length)
     return server
 end
 
-# Starts the TCP server socket listening on configured port
-pub function server_start(server, backlog = 128)
+## Starts the TCP server socket listening on configured port
+pub function server_start(server, backlog: int = 128)
     if server is null
         return -1
     end
@@ -83,8 +87,8 @@ pub function server_start(server, backlog = 128)
 end
 
 # Accepts the next incoming HTTP connection within timeout_ms milliseconds
-# Returns an HttpContext instance, or null if no connection arrived or error
-pub function server_accept(server, timeout_ms = 1000)
+## Returns an HttpContext instance, or null if no connection arrived or error
+pub function server_accept(server, timeout_ms: int = 1000)
     if server is null or server.running == 0 or server.server_sock < 0
         return null
     end
@@ -135,17 +139,17 @@ pub function server_accept(server, timeout_ms = 1000)
 end
 
 # Processes common middlewares (CORS, static files) and matches route on HttpContext
-# Returns the RouteMatch result
+## Returns the RouteMatch result
 pub function server_process(server, ctx)
     if server is null or ctx is null
-        return RouteMatch(0, "not_found", "", {}, 404, [])
+        return RouteMatch { found: 0, action: "not_found", route: "", params: {}, status: 404, allowed_methods: [] }
     end
 
     # Apply CORS middleware if enabled
     if server.options["cors_enabled"] == 1
         let preflight = mw_apply_cors(ctx, server.options["cors_config"])
         if preflight == 1
-            return RouteMatch(1, "cors_preflight", "", {}, 204, [])
+            return RouteMatch { found: 1, action: "cors_preflight", route: "", params: {}, status: 204, allowed_methods: [] }
         end
     end
 
@@ -155,7 +159,7 @@ pub function server_process(server, ctx)
         let dir = server.options["static_dir"]
         let served = mw_serve_static(ctx, prefix, dir)
         if served == 1
-            return RouteMatch(1, "static_file", "", {}, 200, [])
+            return RouteMatch { found: 1, action: "static_file", route: "", params: {}, status: 200, allowed_methods: [] }
         end
     end
 
@@ -180,7 +184,7 @@ pub function server_process(server, ctx)
     return m
 end
 
-# Serializes the response in HttpContext, transmits over TCP, and closes client connection
+## Serializes the response in HttpContext, transmits over TCP, and closes client connection
 pub function server_send(server, ctx)
     if ctx is null or ctx.client_sock < 0
         return 0
@@ -203,7 +207,7 @@ pub function server_send(server, ctx)
     return 1
 end
 
-# Stops the HTTP server and releases socket resources
+## Stops the HTTP server and releases socket resources
 pub function server_close(server)
     if server is not null
         if server.server_sock >= 0

@@ -13,7 +13,7 @@ pub const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 # ═══════════════════════════════════════════════════════════════
 
 ## Computes the RFC 6455 Sec-WebSocket-Accept token from the client key.
-pub function ws_accept_key(sec_key)
+pub function ws_accept_key(sec_key: string) -> string
     if sec_key is null or len(sec_key) == 0
         return ""
     end
@@ -50,7 +50,7 @@ pub function ws_is_upgrade_request(req)
 end
 
 ## Builds the HTTP 101 Switching Protocols handshake wire response.
-pub function ws_handshake_response(req, subprotocol = "")
+pub function ws_handshake_response(req, subprotocol: string = "")
     let sec_key = header_get(req.headers, "Sec-WebSocket-Key")
     let accept_key = ws_accept_key(sec_key)
 

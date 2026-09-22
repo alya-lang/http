@@ -5,7 +5,7 @@ import "../core/headers.alya"
 import "mime" as mime_pkg
 
 ## Internal helper to find substring.
-pub function _static_find(s, target, start_idx = 0)
+pub function _static_find(s, target, start_idx: int = 0)
     let slen = len(s)
     let tlen = len(target)
     if tlen == 0
@@ -22,7 +22,7 @@ pub function _static_find(s, target, start_idx = 0)
 end
 
 ## Normalizes and safely joins directory with requested relative path, rejecting directory traversal.
-pub function _safe_static_path(local_dir, rel_path)
+pub function _safe_static_path(local_dir: string, rel_path)
     # Reject directory traversal attempts
     if _static_find(rel_path, "..", 0) >= 0
         return ""
@@ -46,7 +46,7 @@ end
 
 ## Attempts to serve a static file for the current request.
 ## Returns 1 if file was found and served, 0 otherwise.
-pub function mw_serve_static(ctx, url_prefix, local_dir)
+pub function mw_serve_static(ctx, url_prefix: string, local_dir: string)
     if ctx is null or ctx.req is null
         return 0
     end

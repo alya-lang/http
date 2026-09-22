@@ -4,16 +4,23 @@
 import "../core/headers.alya"
 
 ## Configuration options for Cross-Origin Resource Sharing (CORS).
+##
+## ### Fields
+## - `allow_origin`: Permitted origin string.
+## - `allow_methods`: Permitted method list string.
+## - `allow_headers`: Permitted header list string.
+## - `allow_credentials`: `1` permits credentials, `0` otherwise.
+## - `max_age`: Preflight cache seconds integer.
 pub struct CorsConfig
-    allow_origin
-    allow_methods
-    allow_headers
-    allow_credentials
-    max_age
+    allow_origin: string,
+    allow_methods: string,
+    allow_headers: string,
+    allow_credentials: int,
+    max_age: int
 end
 
 ## Creates a new CorsConfig struct with sensible defaults.
-pub function cors_config_new(origin = "*", methods = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH, QUERY", headers = "Content-Type, Authorization, X-Requested-With", credentials = 0, max_age = 86400)
+pub function cors_config_new(origin: string = "*", methods = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH, QUERY", headers = "Content-Type, Authorization, X-Requested-With", credentials: int = 0, max_age: int = 86400)
     return CorsConfig {
         allow_origin: origin,
         allow_methods: methods,

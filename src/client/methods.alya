@@ -1,27 +1,31 @@
+## # http/client/methods
+##
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang).
+
 # Top-Level HTTP Client Convenience Functions
 # Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
 import "./client.alya"
 import "../core/headers.alya"
 
-# Default shared client instance
+## Default shared client instance
 pub function _default_client()
     return client_new(10000, 1, 5)
 end
 
-# Performs an HTTP request with arbitrary method
-pub function http_request(method, url_str, headers = null, body = "")
+## Performs an HTTP request with arbitrary method
+pub function http_request(method, url_str: string, headers = null, body: string = "")
     let client = _default_client()
     return client_execute(client, method, url_str, headers, body)
 end
 
-# Convenience GET request
-pub function http_get(url_str, headers = null)
+## Convenience GET request
+pub function http_get(url_str: string, headers = null)
     return http_request("GET", url_str, headers, "")
 end
 
-# Convenience POST request
-pub function http_post(url_str, body = "", content_type = "application/json", headers = null)
+## Convenience POST request
+pub function http_post(url_str: string, body: string = "", content_type: string = "application/json", headers = null)
     if headers is null
         headers = {}
     end
@@ -31,8 +35,8 @@ pub function http_post(url_str, body = "", content_type = "application/json", he
     return http_request("POST", url_str, headers, body)
 end
 
-# Convenience PUT request
-pub function http_put(url_str, body = "", content_type = "application/json", headers = null)
+## Convenience PUT request
+pub function http_put(url_str: string, body: string = "", content_type: string = "application/json", headers = null)
     if headers is null
         headers = {}
     end
@@ -42,8 +46,8 @@ pub function http_put(url_str, body = "", content_type = "application/json", hea
     return http_request("PUT", url_str, headers, body)
 end
 
-# Convenience PATCH request
-pub function http_patch(url_str, body = "", content_type = "application/json", headers = null)
+## Convenience PATCH request
+pub function http_patch(url_str: string, body: string = "", content_type: string = "application/json", headers = null)
     if headers is null
         headers = {}
     end
@@ -53,23 +57,23 @@ pub function http_patch(url_str, body = "", content_type = "application/json", h
     return http_request("PATCH", url_str, headers, body)
 end
 
-# Convenience DELETE request
-pub function http_delete(url_str, headers = null)
+## Convenience DELETE request
+pub function http_delete(url_str: string, headers = null)
     return http_request("DELETE", url_str, headers, "")
 end
 
-# Convenience HEAD request
-pub function http_head(url_str, headers = null)
+## Convenience HEAD request
+pub function http_head(url_str: string, headers = null)
     return http_request("HEAD", url_str, headers, "")
 end
 
-# Convenience OPTIONS request
-pub function http_options(url_str, headers = null)
+## Convenience OPTIONS request
+pub function http_options(url_str: string, headers = null)
     return http_request("OPTIONS", url_str, headers, "")
 end
 
-# Convenience QUERY request (IETF safe method with payload body)
-pub function http_query(url_str, body = "", content_type = "application/json", headers = null)
+## Convenience QUERY request (IETF safe method with payload body)
+pub function http_query(url_str: string, body: string = "", content_type: string = "application/json", headers = null)
     if headers is null
         headers = {}
     end
@@ -79,7 +83,7 @@ pub function http_query(url_str, body = "", content_type = "application/json", h
     return http_request("QUERY", url_str, headers, body)
 end
 
-# Generates standard HTTP Basic Authentication header string
-pub function basic_auth(username, password)
+## Generates standard HTTP Basic Authentication header string
+pub function basic_auth(username, password) -> string
     return "Basic " + base64_encode(username + ":" + password)
 end

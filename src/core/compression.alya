@@ -4,7 +4,7 @@
 import "compress" as compress_pkg
 
 ## Internal substring search helper.
-pub function _comp_str_find(s, target, start_idx = 0)
+pub function _comp_str_find(s, target, start_idx: int = 0)
     let slen = len(s)
     let tlen = len(target)
     if tlen == 0
@@ -22,7 +22,7 @@ end
 
 ## Compresses a payload string with the given algorithm ("gzip", "br"/"brotli", "deflate", "zstd").
 ## Returns compressed byte list, or null if encoding is unsupported.
-pub function http_compress(data_str, encoding = "gzip")
+pub function http_compress(data_str, encoding: string = "gzip")
     let enc = lower(trim(encoding))
     when enc
         is "gzip" then return compress_pkg::gzip_str(data_str)
@@ -37,7 +37,7 @@ end
 
 ## Decompresses a byte list with the given algorithm into a UTF-8 string.
 ## Returns decompressed string, or null if encoding is unsupported.
-pub function http_decompress(bytes_list, encoding = "gzip")
+pub function http_decompress(bytes_list, encoding: string = "gzip")
     let enc = lower(trim(encoding))
     when enc
         is "gzip" then return compress_pkg::gunzip_str(bytes_list)

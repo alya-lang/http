@@ -5,7 +5,7 @@ import "../types.alya"
 import "./route.alya"
 
 ## Creates a new HttpRouter instance.
-pub function router_new(not_found_action = "not_found")
+pub function router_new(not_found_action: string = "not_found")
     return HttpRouter {
         routes: [],
         not_found_action: not_found_action
@@ -13,7 +13,7 @@ pub function router_new(not_found_action = "not_found")
 end
 
 ## Adds a new route rule to the router.
-pub function router_add(r, method, pattern, action)
+pub function router_add(r, method, pattern: string, action)
     if r is null
         return null
     end
@@ -23,52 +23,52 @@ pub function router_add(r, method, pattern, action)
 end
 
 ## Registers a GET route.
-pub function router_get(r, pattern, action)
+pub function router_get(r, pattern: string, action)
     return router_add(r, "GET", pattern, action)
 end
 
 ## Registers a POST route.
-pub function router_post(r, pattern, action)
+pub function router_post(r, pattern: string, action)
     return router_add(r, "POST", pattern, action)
 end
 
 ## Registers a PUT route.
-pub function router_put(r, pattern, action)
+pub function router_put(r, pattern: string, action)
     return router_add(r, "PUT", pattern, action)
 end
 
 ## Registers a DELETE route.
-pub function router_delete(r, pattern, action)
+pub function router_delete(r, pattern: string, action)
     return router_add(r, "DELETE", pattern, action)
 end
 
 ## Registers a PATCH route.
-pub function router_patch(r, pattern, action)
+pub function router_patch(r, pattern: string, action)
     return router_add(r, "PATCH", pattern, action)
 end
 
 ## Registers a HEAD route.
-pub function router_head(r, pattern, action)
+pub function router_head(r, pattern: string, action)
     return router_add(r, "HEAD", pattern, action)
 end
 
 ## Registers an OPTIONS route.
-pub function router_options(r, pattern, action)
+pub function router_options(r, pattern: string, action)
     return router_add(r, "OPTIONS", pattern, action)
 end
 
 ## Registers a QUERY route (IETF safe method with request body).
-pub function router_query(r, pattern, action)
+pub function router_query(r, pattern: string, action)
     return router_add(r, "QUERY", pattern, action)
 end
 
 ## Registers a route matching ANY HTTP method.
-pub function router_any(r, pattern, action)
+pub function router_any(r, pattern: string, action)
     return router_add(r, "ANY", pattern, action)
 end
 
 ## Joins prefix and path pattern cleanly (e.g. "/api" + "/users/:id" -> "/api/users/:id").
-pub function _router_join_prefix(prefix, pattern)
+pub function _router_join_prefix(prefix: string, pattern: string)
     if prefix is null or prefix == "" or prefix == "/"
         return pattern
     end
@@ -87,7 +87,7 @@ pub function _router_join_prefix(prefix, pattern)
 end
 
 ## Adds a route under a group prefix.
-pub function router_group_add(r, prefix, method, pattern, action)
+pub function router_group_add(r, prefix: string, method, pattern: string, action)
     let full_pattern = _router_join_prefix(prefix, pattern)
     return router_add(r, method, full_pattern, action)
 end
@@ -106,9 +106,9 @@ end
 
 ## Matches a request method and path against registered routes.
 ## Returns a RouteMatch struct.
-pub function router_match(r, method, path)
+pub function router_match(r, method, path: string)
     if r is null
-        return RouteMatch(0, "not_found", "", {}, 404, [])
+        return RouteMatch { found: 0, action: "not_found", route: "", params: {}, status: 404, allowed_methods: [] }
     end
 
     let raw_m = upper(trim(method))
@@ -133,7 +133,7 @@ pub function router_match(r, method, path)
         let res = route_match_segments(rt.segments, req_segs)
         if res["matched"] == 1
             if rt.method == req_method or rt.method == "ANY" or rt.method == "*"
-                return RouteMatch(1, rt.action, rt.pattern, res["params"], 200, [])
+                return RouteMatch { found: 1, action: rt.action, route: rt.pattern, params: res["params"], status: 200, allowed_methods: [] }
             else
                 if _arr_has(allowed_methods, rt.method) == 0
                     push(allowed_methods, rt.method)
@@ -145,9 +145,9 @@ pub function router_match(r, method, path)
 
     # If path matched routes for other methods, return 405 Method Not Allowed
     if len(allowed_methods) > 0
-        return RouteMatch(0, "method_not_allowed", "", {}, 405, allowed_methods)
+        return RouteMatch { found: 0, action: "method_not_allowed", route: "", params: {}, status: 405, allowed_methods: allowed_methods }
     end
 
     # Otherwise return 404 Not Found
-    return RouteMatch(0, r.not_found_action, "", {}, 404, [])
+    return RouteMatch { found: 0, action: r.not_found_action, route: "", params: {}, status: 404, allowed_methods: [] }
 end

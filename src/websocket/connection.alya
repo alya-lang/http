@@ -15,9 +15,9 @@ end
 # Represents a bidirectional WebSocket connection
 pub struct WebSocketConnection
     stream
-    is_server
-    state
-    tag
+    is_server: int
+    state: int
+    tag: string
     data
     buffer
     write_fn
@@ -41,8 +41,8 @@ function _ws_default_close(s)
     return net::tcp_close(s)
 end
 
-# Creates and initializes a new WebSocket connection wrapper
-pub function ws_connection_new(stream, is_server = 1, write_fn = null, close_fn = null)
+## Creates and initializes a new WebSocket connection wrapper
+pub function ws_connection_new(stream, is_server: int = 1, write_fn = null, close_fn = null)
     if write_fn is null
         write_fn = _ws_default_write
     end
@@ -66,8 +66,8 @@ pub function ws_connection_new(stream, is_server = 1, write_fn = null, close_fn 
     }
 end
 
-# Creates a WebSocket connection over a raw integer TCP socket fd
-pub function ws_connection_from_socket(sock_fd, is_server = 1)
+## Creates a WebSocket connection over a raw integer TCP socket fd
+pub function ws_connection_from_socket(sock_fd: int, is_server: int = 1)
     return ws_connection_new(sock_fd, is_server, _ws_default_write, _ws_default_close)
 end
 
@@ -97,8 +97,8 @@ end
 # Transmission Operations
 # ═══════════════════════════════════════════════════════════════
 
-# Transmits a UTF-8 text message over the WebSocket connection
-pub function ws_send(ws: WebSocketConnection, text)
+## Transmits a UTF-8 text message over the WebSocket connection
+pub function ws_send(ws: WebSocketConnection, text: string)
     if ws is null or ws.state != WebSocketState.Open
         return 0
     end
@@ -107,7 +107,7 @@ pub function ws_send(ws: WebSocketConnection, text)
     return _ws_raw_write(ws, wire)
 end
 
-# Transmits a binary message over the WebSocket connection
+## Transmits a binary message over the WebSocket connection
 pub function ws_send_binary(ws: WebSocketConnection, data)
     if ws is null or ws.state != WebSocketState.Open
         return 0
@@ -117,8 +117,8 @@ pub function ws_send_binary(ws: WebSocketConnection, data)
     return _ws_raw_write(ws, wire)
 end
 
-# Sends a ping heartbeat frame over the WebSocket connection
-pub function ws_ping(ws: WebSocketConnection, data = "")
+## Sends a ping heartbeat frame over the WebSocket connection
+pub function ws_ping(ws: WebSocketConnection, data: string = "")
     if ws is null or ws.state != WebSocketState.Open
         return 0
     end
@@ -127,8 +127,8 @@ pub function ws_ping(ws: WebSocketConnection, data = "")
     return _ws_raw_write(ws, wire)
 end
 
-# Sends a pong heartbeat frame over the WebSocket connection
-pub function ws_pong(ws: WebSocketConnection, data = "")
+## Sends a pong heartbeat frame over the WebSocket connection
+pub function ws_pong(ws: WebSocketConnection, data: string = "")
     if ws is null or ws.state != WebSocketState.Open
         return 0
     end
@@ -137,8 +137,8 @@ pub function ws_pong(ws: WebSocketConnection, data = "")
     return _ws_raw_write(ws, wire)
 end
 
-# Initiates or completes a WebSocket close handshake
-pub function ws_close(ws: WebSocketConnection, code = 1000, reason = "")
+## Initiates or completes a WebSocket close handshake
+pub function ws_close(ws: WebSocketConnection, code: int = 1000, reason: string = "")
     if ws is null or ws.state == WebSocketState.Closed
         return 0
     end
@@ -160,7 +160,7 @@ end
 # Stream Feeding & Frame Ingestion
 # ═══════════════════════════════════════════════════════════════
 
-# Feeds incoming network data into the connection buffer and processes all frames
+## Feeds incoming network data into the connection buffer and processes all frames
 pub function ws_feed(ws: WebSocketConnection, chunk)
     if ws is null or chunk is null or len(chunk) == 0
         return 0
@@ -235,6 +235,7 @@ end
 # Event Registration & Struct Methods
 # ═══════════════════════════════════════════════════════════════
 
+## Registers a text/binary message callback on a connection.
 pub function ws_on_message(ws: WebSocketConnection, callback)
     if ws is not null
         ws.on_message_cb = callback
@@ -242,6 +243,7 @@ pub function ws_on_message(ws: WebSocketConnection, callback)
     return ws
 end
 
+## Registers a close callback on a connection.
 pub function ws_on_close(ws: WebSocketConnection, callback)
     if ws is not null
         ws.on_close_cb = callback
@@ -249,6 +251,7 @@ pub function ws_on_close(ws: WebSocketConnection, callback)
     return ws
 end
 
+## Registers a ping callback on a connection.
 pub function ws_on_ping(ws: WebSocketConnection, callback)
     if ws is not null
         ws.on_ping_cb = callback
@@ -256,6 +259,7 @@ pub function ws_on_ping(ws: WebSocketConnection, callback)
     return ws
 end
 
+## Registers a pong callback on a connection.
 pub function ws_on_pong(ws: WebSocketConnection, callback)
     if ws is not null
         ws.on_pong_cb = callback
@@ -263,6 +267,7 @@ pub function ws_on_pong(ws: WebSocketConnection, callback)
     return ws
 end
 
+## Registers an error callback on a connection.
 pub function ws_on_error(ws: WebSocketConnection, callback)
     if ws is not null
         ws.on_error_cb = callback
@@ -270,46 +275,57 @@ pub function ws_on_error(ws: WebSocketConnection, callback)
     return ws
 end
 
-pub function WebSocketConnection.send(self, text)
+## Sends a text frame on this connection.
+pub function WebSocketConnection.send(self: WebSocketConnection, text: string)
     return ws_send(self, text)
 end
 
-pub function WebSocketConnection.send_binary(self, data)
+## Sends a binary frame on this connection.
+pub function WebSocketConnection.send_binary(self: WebSocketConnection, data)
     return ws_send_binary(self, data)
 end
 
-pub function WebSocketConnection.ping(self, data = "")
+## Sends a ping frame on this connection.
+pub function WebSocketConnection.ping(self: WebSocketConnection, data: string = "")
     return ws_ping(self, data)
 end
 
-pub function WebSocketConnection.pong(self, data = "")
+## Sends a pong frame on this connection.
+pub function WebSocketConnection.pong(self: WebSocketConnection, data: string = "")
     return ws_pong(self, data)
 end
 
-pub function WebSocketConnection.close(self, code = 1000, reason = "")
+## Closes this connection with a status code.
+pub function WebSocketConnection.close(self: WebSocketConnection, code: int = 1000, reason: string = "")
     return ws_close(self, code, reason)
 end
 
-pub function WebSocketConnection.feed(self, chunk)
+## Feeds received bytes into this connection.
+pub function WebSocketConnection.feed(self: WebSocketConnection, chunk)
     return ws_feed(self, chunk)
 end
 
-pub function WebSocketConnection.on_message(self, callback)
+## Registers a message callback on this connection.
+pub function WebSocketConnection.on_message(self: WebSocketConnection, callback)
     return ws_on_message(self, callback)
 end
 
-pub function WebSocketConnection.on_close(self, callback)
+## Registers a close callback on this connection.
+pub function WebSocketConnection.on_close(self: WebSocketConnection, callback)
     return ws_on_close(self, callback)
 end
 
-pub function WebSocketConnection.on_ping(self, callback)
+## Registers a ping callback on this connection.
+pub function WebSocketConnection.on_ping(self: WebSocketConnection, callback)
     return ws_on_ping(self, callback)
 end
 
-pub function WebSocketConnection.on_pong(self, callback)
+## Registers a pong callback on this connection.
+pub function WebSocketConnection.on_pong(self: WebSocketConnection, callback)
     return ws_on_pong(self, callback)
 end
 
-pub function WebSocketConnection.on_error(self, callback)
+## Registers an error callback on this connection.
+pub function WebSocketConnection.on_error(self: WebSocketConnection, callback)
     return ws_on_error(self, callback)
 end

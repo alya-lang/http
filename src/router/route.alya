@@ -4,7 +4,7 @@
 import "../types.alya"
 
 ## Splits a URL path into clean, non-empty segments.
-pub function route_split_path(path)
+pub function route_split_path(path: string) -> array
     if path is null or len(path) == 0 or path == "/"
         return []
     end
@@ -37,7 +37,7 @@ pub function route_split_path(path)
 end
 
 ## Creates a new HttpRoute definition struct.
-pub function route_new(method, pattern, action)
+pub function route_new(method, pattern: string, action)
     let m = "GET"
     let raw_m = upper(trim(method))
     when raw_m
@@ -63,7 +63,7 @@ end
 
 ## Matches a request path against a route pattern's segments.
 ## Returns Map: {"matched": 1, "params": {...}} or {"matched": 0}.
-pub function route_match_segments(pat_segs, req_segs)
+pub function route_match_segments(pat_segs, req_segs) -> int
     let plen = len(pat_segs)
     let rlen = len(req_segs)
     let params = {}

@@ -29,117 +29,117 @@ import "./server/reactive.alya"
 # ═══════════════════════════════════════════════════════════════
 
 ## Creates an HTTP server on port and host.
-pub function server(port = 8080, host = "0.0.0.0", router_inst = null)
+pub function server(port: int = 8080, host: string = "0.0.0.0", router_inst = null)
     return server_new(port, host, router_inst)
 end
 
 ## Creates a new HTTP router.
-pub function router(not_found_action = "not_found")
+pub function router(not_found_action: string = "not_found")
     return router_new(not_found_action)
 end
 
 ## Creates a new route definition.
-pub function route(method, pattern, action)
+pub function route(method, pattern: string, action)
     return route_new(method, pattern, action)
 end
 
 ## Creates a new route group with a common path prefix.
-pub function group(router_inst, prefix)
+pub function group(router_inst, prefix: string)
     return group_new(router_inst, prefix)
 end
 
 ## Creates a new HTTP client.
-pub function client(timeout_ms = 10000, follow_redirects = 1, max_redirects = 5)
+pub function client(timeout_ms: int = 10000, follow_redirects: int = 1, max_redirects: int = 5)
     return client_new(timeout_ms, follow_redirects, max_redirects)
 end
 
 ## Creates a new HttpRequest struct instance.
-pub function request(method, path, query = "", headers = null, body = "", remote_addr = "", params = null, cookies = null, query_params = null)
+pub function request(method, path: string, query: string = "", headers = null, body: string = "", remote_addr: string = "", params = null, cookies = null, query_params = null)
     return request_create(method, path, query, headers, body, remote_addr, params, cookies, query_params)
 end
 
 ## Creates a new HttpResponse struct instance.
-pub function response(status_code = 200, status_text = "OK", headers = null, body = "")
+pub function response(status_code: int = 200, status_text: string = "OK", headers = null, body: string = "")
     return response_create(status_code, status_text, headers, body)
 end
 
 ## Creates a new HttpContext struct instance.
-pub function context(req, res = null, client_sock = -1)
+pub function context(req, res = null, client_sock: int = -1)
     return context_create(req, res, client_sock)
 end
 
 ## Creates a new HttpContext instance with helper bindings.
-pub function ctx(req, res = null, client_sock = -1)
+pub function ctx(req, res = null, client_sock: int = -1)
     return ctx_new(req, res, client_sock)
 end
 
 ## Creates a new HTTP cookie.
-pub function cookie(name, value, path = "/", max_age = -1, http_only = 0, secure = 0, same_site = "Lax")
+pub function cookie(name: string, value: string, path: string = "/", max_age: int = -1, http_only: int = 0, secure: int = 0, same_site: string = "Lax")
     return cookie_new(name, value, path, max_age, http_only, secure, same_site)
 end
 
 ## Creates a new CORS config.
-pub function cors(origin = "*", methods = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH, QUERY", headers = "Content-Type, Authorization, X-Requested-With")
+pub function cors(origin: string = "*", methods = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH, QUERY", headers = "Content-Type, Authorization, X-Requested-With")
     return cors_config_new(origin, methods, headers)
 end
 
 ## Creates a new Compression config.
-pub function compression(min_length = 256)
+pub function compression(min_length: int = 256)
     return compression_config_new(min_length)
 end
 
 ## Compresses payload string with given algorithm ("gzip", "br", "deflate", "zstd").
-pub function compress(data_str, encoding = "gzip")
+pub function compress(data_str, encoding: string = "gzip")
     return http_compress(data_str, encoding)
 end
 
 ## Decompresses byte list with given algorithm into string.
-pub function decompress(bytes_list, encoding = "gzip")
+pub function decompress(bytes_list, encoding: string = "gzip")
     return http_decompress(bytes_list, encoding)
 end
 
 ## Returns the standard HTTP status reason phrase for a given code.
-pub function status_text(code)
+pub function status_text(code: int) -> string
     return http_status_text(code)
 end
 
 ## Checks if status code is informational (1xx).
-pub function is_informational(code)
+pub function is_informational(code: int) -> int
     return http_is_informational(code)
 end
 
 ## Checks if status code is successful (2xx).
-pub function is_success(code)
+pub function is_success(code: int) -> int
     return http_is_success(code)
 end
 
 ## Checks if status code is redirection (3xx).
-pub function is_redirect(code)
+pub function is_redirect(code: int) -> int
     return http_is_redirect(code)
 end
 
 ## Checks if status code is client error (4xx).
-pub function is_client_error(code)
+pub function is_client_error(code: int) -> int
     return http_is_client_error(code)
 end
 
 ## Checks if status code is server error (5xx).
-pub function is_server_error(code)
+pub function is_server_error(code: int) -> int
     return http_is_server_error(code)
 end
 
 ## Checks if status code represents an error (4xx, 5xx, or negative).
-pub function is_error(code)
+pub function is_error(code: int) -> int
     return http_is_error(code)
 end
 
 ## Parses a raw HTTP wire request string into an HttpRequest struct.
-pub function parse_request(raw_http, remote_addr = "")
+pub function parse_request(raw_http, remote_addr: string = "")
     return http_parse_request(raw_http, remote_addr)
 end
 
 ## Formats an HttpResponse struct into a raw HTTP wire response string.
-pub function format_response(res)
+pub function format_response(res) -> string
     return http_format_response(res)
 end
 
@@ -149,48 +149,48 @@ pub function parse_response(raw_http)
 end
 
 ## Formats an HttpRequest struct into a raw HTTP wire request string.
-pub function format_request(req)
+pub function format_request(req) -> string
     return http_format_request(req)
 end
 
 ## Applies error recovery middleware to an HttpContext.
-pub function recovery(ctx, err_message = "Internal Server Error")
+pub function recovery(ctx, err_message: string = "Internal Server Error")
     return mw_apply_recovery(ctx, err_message)
 end
 
 ## Serves a static file for an HttpContext from a local directory.
-pub function serve_static(ctx, url_prefix, local_dir)
+pub function serve_static(ctx, url_prefix: string, local_dir: string)
     return mw_serve_static(ctx, url_prefix, local_dir)
 end
 
 ## Formats a structured log line for an HTTP request.
-pub function format_log(method, path, status, latency_ms = -1, remote_addr = "")
+pub function format_log(method, path: string, status: int, latency_ms: int = -1, remote_addr: string = "") -> string
     return mw_format_log(method, path, status, latency_ms, remote_addr)
 end
 
 ## Logs an HttpContext request and response.
-pub function log_context(ctx, latency_ms = -1)
+pub function log_context(ctx, latency_ms: int = -1)
     return mw_log_context(ctx, latency_ms)
 end
 
 ## Splits a URL path into non-empty segments.
-pub function split_path(path)
+pub function split_path(path: string) -> array
     return route_split_path(path)
 end
 
 ## Creates and binds an event-driven reactive HTTP/WebSocket server to an EventLoop.
-pub function reactive_server(loop, port = 8080, host = "0.0.0.0", router_inst = null, on_request = null, on_websocket = null)
+pub function reactive_server(loop, port: int = 8080, host: string = "0.0.0.0", router_inst = null, on_request = null, on_websocket = null)
     let s = server_new(port, host, router_inst)
     return server_use_event_loop(s, loop, on_request, on_websocket)
 end
 
 ## Creates a WebSocket connection wrapper over an event::TcpStream.
-pub function websocket(stream, is_server = 1)
+pub function websocket(stream, is_server: int = 1)
     return ws_connection_from_stream(stream, is_server)
 end
 
 ## Computes the RFC 6455 Sec-WebSocket-Accept token.
-pub function ws_accept(sec_key)
+pub function ws_accept(sec_key: string)
     return ws_accept_key(sec_key)
 end
 
@@ -200,16 +200,16 @@ pub function ws_is_upgrade(req)
 end
 
 ## Creates a new WebSocket frame struct.
-pub function ws_frame(opcode, payload = "", is_final = 1, masked = 0, mask_key = null)
+pub function ws_frame(opcode: int, payload: string = "", is_final: int = 1, masked: int = 0, mask_key = null)
     return ws_frame_create(opcode, payload, is_final, masked, mask_key)
 end
 
 ## Encodes a WebSocket frame into raw RFC 6455 wire bytes.
-pub function ws_encode_frame(opcode, payload, is_client = 0)
+pub function ws_encode_frame(opcode: int, payload, is_client: int = 0)
     return ws_frame_encode(opcode, payload, is_client)
 end
 
 ## Creates a low-level WebSocket connection.
-pub function ws_conn(stream, is_server = 1, write_fn = null, close_fn = null)
+pub function ws_conn(stream, is_server: int = 1, write_fn = null, close_fn = null)
     return ws_connection_new(stream, is_server, write_fn, close_fn)
 end

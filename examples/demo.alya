@@ -1,4 +1,6 @@
-# General Feature Tour of alya-lang/http
+## Demo of the http package
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
 import "../src/lib.alya" as http
 
 function handle_hello(ctx)
