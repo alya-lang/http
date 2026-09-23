@@ -63,7 +63,7 @@ end
 
 ## Matches a request path against a route pattern's segments.
 ## Returns Map: {"matched": 1, "params": {...}} or {"matched": 0}.
-pub function route_match_segments(pat_segs, req_segs) -> int
+pub function route_match_segments(pat_segs, req_segs) -> map
     let plen = len(pat_segs)
     let rlen = len(req_segs)
     let params = {}

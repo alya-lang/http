@@ -4,12 +4,12 @@
 import "../src/lib.alya" as http
 
 function handle_hello(ctx)
-    return http::ctx_json(ctx, 200, "{\"message\":\"Hello from Alya HTTP!\"}")
+    return http::ctx_json(ctx, "{\"message\":\"Hello from Alya HTTP!\"}", 200)
 end
 
 function handle_user(ctx)
     let uid = http::ctx_param(ctx, "id")
-    return http::ctx_json(ctx, 200, "{\"userId\":\"" + uid + "\"}")
+    return http::ctx_json(ctx, "{\"userId\":\"" + uid + "\"}", 200)
 end
 
 say "=== alya-lang/http Feature Tour ==="

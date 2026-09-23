@@ -5,7 +5,7 @@ import "std/bench"
 import "../src/lib.alya" as http
 
 function dummy_handler(ctx)
-    return http::ctx_json(ctx, 200, "{\"ok\":true}")
+    return http::ctx_json(ctx, "{\"ok\":true}", 200)
 end
 
 let runner = bench_runner("alya-lang/http Micro-Benchmarks")
