@@ -133,9 +133,8 @@ pub function server_accept(server, timeout_ms: int = 1000)
     let remote_addr = net::tcp_peer_addr(client_sock)
     let req = http_parse_request(raw_req, remote_addr)
     let res = response_create(200, "OK")
-    let ctx = context_create(req, res, client_sock)
 
-    return ctx
+    return context_create(req, res, client_sock)
 end
 
 # Processes common middlewares (CORS, static files) and matches route on HttpContext
