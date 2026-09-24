@@ -44,7 +44,7 @@ end
 pub struct ReactiveClientState
     stream
     server
-    buffer
+    buffer: string
     headers_parsed: int
     req
     content_length: int
@@ -61,7 +61,7 @@ pub function _on_reactive_client_close(_client_stream: TcpStream)
 end
 
 ## Callback invoked when data arrives on a reactive client stream.
-pub function _on_reactive_client_data(client_stream: TcpStream, chunk)
+pub function _on_reactive_client_data(client_stream: TcpStream, chunk: string)
     if client_stream is null or chunk is null or len(chunk) == 0
         return 0
     end
@@ -112,6 +112,7 @@ pub function _on_reactive_client_data(client_stream: TcpStream, chunk)
                     ev::tcp_stream_write(client_stream, accept_resp)
 
                     let ws: WebSocketConnection = ws_connection_from_stream(client_stream, 1)
+
                     state.is_websocket = 1
                     state.ws_conn = ws
 
