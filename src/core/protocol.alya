@@ -10,6 +10,7 @@ import "./status.alya"
 import "./headers.alya"
 import "./cookies.alya"
 import "url" as url_pkg
+import "crypto" as crypto
 
 ## Internal helper to find substring index
 pub function _proto_find(s, target, start_idx: int = 0)
@@ -122,7 +123,7 @@ end
 ## Parses a raw HTTP/1.1 response wire string into an HttpResponse struct
 pub function http_parse_response(raw)
     if raw is null or len(raw) == 0
-        return HttpResponse { status_code: -1, status_text: "Empty response", headers: {}, body: "", cookies: [] }
+        return HttpResponse { status_code: -1, status_text: "Empty response", headers: {}, body: "", body_bytes: [], cookies: [] }
     end
 
     # Find header and body boundary (\r\n\r\n or \n\n)
@@ -193,6 +194,7 @@ pub function http_parse_response(raw)
         status_text: status_text,
         headers: headers,
         body: body_part,
+        body_bytes: crypto::str_to_bytes(body_part),
         cookies: cookies
     }
 end
@@ -254,6 +256,112 @@ pub function http_format_response(res) -> string
     end
 
     return wire
+end
+
+## Finds a byte needle inside a byte array starting at an offset
+pub function proto_find_bytes(data, needle, start_idx: int = 0) -> int
+    if data is null or needle is null or len(needle) == 0
+        return -1
+    end
+    let off = start_idx
+    if off < 0
+        off = 0
+    end
+    let i = off
+    while i + len(needle) <= len(data)
+        let hit = 1
+        let j = 0
+        while j < len(needle)
+            if data[i + j] != needle[j]
+                hit = 0
+                break
+            end
+            j += 1
+        end
+        if hit == 1
+            return i
+        end
+        i += 1
+    end
+    return -1
+end
+
+## Returns 1 when a byte array holds no zero bytes (string-safe)
+pub function bytes_are_text(data) -> int
+    if data is null
+        return 1
+    end
+    let i = 0
+    while i < len(data)
+        if data[i] == 0
+            return 0
+        end
+        i += 1
+    end
+    return 1
+end
+
+## Converts NUL-free bytes into a string, empty string otherwise
+pub function bytes_to_text_or_empty(data) -> string
+    if bytes_are_text(data) == 0
+        return ""
+    end
+    return crypto::bytes_to_str(data)
+end
+
+## Parses an HTTP/1.1 response from raw bytes (binary-body safe)
+##
+## Headers decode as ASCII text; the body stays a byte array while `body`
+## carries the text form for NUL-free payloads (empty otherwise).
+pub function http_parse_response_bytes(raw) -> HttpResponse
+    if raw is null or len(raw) == 0
+        return HttpResponse { status_code: -1, status_text: "Empty response", headers: {}, body: "", body_bytes: [], cookies: [] }
+    end
+    let sep = proto_find_bytes(raw, [13, 10, 13, 10], 0)
+    let head_len = len(raw)
+    let body_start = len(raw)
+    if sep >= 0
+        head_len = sep
+        body_start = sep + 4
+    end
+    let head = []
+    let i = 0
+    while i < head_len
+        head.push(raw[i])
+        i += 1
+    end
+    let body = []
+    i = body_start
+    while i < len(raw)
+        body.push(raw[i])
+        i += 1
+    end
+    let parsed = http_parse_response(crypto::bytes_to_str(head))
+    parsed.body = bytes_to_text_or_empty(body)
+    parsed.body_bytes = body
+    return parsed
+end
+
+## Returns the response body as bytes, converting text when needed
+pub function response_body_bytes(res) -> array
+    if res is null
+        return []
+    end
+    if res.body_bytes is not null and len(res.body_bytes) > 0
+        return res.body_bytes
+    end
+    if res.body is null or res.body == ""
+        return []
+    end
+    return crypto::str_to_bytes(res.body)
+end
+
+## Returns the response body as text (empty for binary payloads)
+pub function response_body_text(res) -> string
+    if res is null or res.body is null
+        return ""
+    end
+    return res.body
 end
 
 ## Serializes an HttpRequest struct to HTTP/1.1 wire string format

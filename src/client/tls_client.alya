@@ -1,0 +1,190 @@
+## # http/client/tls_client
+##
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang).
+##
+## Native HTTPS transport over `alya-lang/tls`: real TCP dial, TLS version
+## and suite negotiation, peer verification per client policy, and
+## binary-safe response reads. Replaces the legacy curl subprocess bridge.
+
+import "tls" as tls
+import "url" as url_pkg
+import "crypto" as crypto
+import "../types.alya"
+import "../core/status.alya"
+import "../core/headers.alya"
+import "../core/protocol.alya"
+
+## Builds the HTTP/1.1 request wire for host, path, headers, and body
+pub function https_build_request(method, host: string, path: string, req_headers, body: string) -> string
+    let target = path
+    if target is null or target == ""
+        target = "/"
+    end
+    let wire = method + " " + target + " HTTP/1.1\r\n"
+    wire = wire + "Host: " + host + "\r\nUser-Agent: Alya-Http/0.1.0\r\nConnection: close\r\n"
+    if body is not null and len(body) > 0
+        wire = wire + "Content-Length: " + str(len(body)) + "\r\n"
+    end
+    wire = wire + headers_format(req_headers)
+    wire = wire + "\r\n"
+    if body is not null and len(body) > 0
+        wire = wire + body
+    end
+    return wire
+end
+
+## Performs one HTTPS request natively, following redirects when configured
+pub function https_execute(client, method, url_str: string, extra_headers = null, body: string = "")
+    let parsed = url_pkg::url_parse(url_str)
+    let host = parsed.host
+    if host == ""
+        return HttpResponse { status_code: -1, status_text: "Invalid URL host: {url_str}", headers: {}, body: "", body_bytes: [], cookies: [] }
+    end
+    let p_str = url_pkg::url_effective_port(parsed)
+    let port = 0
+    if len(p_str) > 0
+        port = to_int(p_str)
+    end
+    if port <= 0
+        port = 443
+    end
+
+    let req_headers = {}
+    if client is not null and client.headers is not null
+        let ckeys = client.headers.keys()
+        let ci = 0
+        while ci < len(ckeys)
+            let ck = ckeys[ci]
+            req_headers[ck] = client.headers[ck]
+            ci += 1
+        end
+    end
+    if extra_headers is not null
+        let ekeys = extra_headers.keys()
+        let ei = 0
+        while ei < len(ekeys)
+            let ek = ekeys[ei]
+            req_headers[lower(ek)] = extra_headers[ek]
+            ei += 1
+        end
+    end
+
+    let timeout_ms = 10000
+    let follow = 1
+    let max_redirs = 5
+    let verify = 1
+    if client is not null
+        timeout_ms = client.timeout_ms
+        follow = client.follow_redirects
+        max_redirs = client.max_redirects
+        verify = client.tls_verify
+    end
+
+    let path = parsed.path
+    if path == ""
+        path = parsed.url_path
+    end
+    if path == ""
+        path = "/"
+    end
+    let q = parsed.query
+    if q == ""
+        q = parsed.url_query
+    end
+    if q != ""
+        path = path + "?" + q
+    end
+
+    let cfg = tls::config(host, port)
+    cfg.timeout_ms = timeout_ms
+    cfg.cipher_allowlist = [156]
+    if verify == 0
+        cfg = cfg.with_verify(tls::TlsVerifyMode.None)
+    end
+    let ctx = tls::connect(cfg)
+    if ctx.last_error != ""
+        return HttpResponse { status_code: -1, status_text: "TLS connection failed to {host}:{port}: " + ctx.last_error, headers: {}, body: "", body_bytes: [], cookies: [] }
+    end
+    let full = tls::tls_handshake_complete(ctx)
+    if full.last_error != ""
+        return HttpResponse { status_code: -1, status_text: "TLS handshake failed to {host}:{port}: " + full.last_error, headers: {}, body: "", body_bytes: [], cookies: [] }
+    end
+
+    let wire = https_build_request(method, host, path, req_headers, body)
+    if tls::tls_send_encrypted(full, crypto::str_to_bytes(wire)) < 0
+        let err = "TLS send failed to {host}:{port}"
+        tls::close(full)
+        return HttpResponse { status_code: -1, status_text: err, headers: {}, body: "", body_bytes: [], cookies: [] }
+    end
+
+    let raw = []
+    let content_length = -1
+    let header_end_idx = -1
+    let guard = 0
+    while guard < 512
+        let chunk = tls::tls_recv_encrypted(full)
+        if len(chunk) == 0
+            break
+        end
+        let c = 0
+        while c < len(chunk)
+            raw.push(chunk[c])
+            c += 1
+        end
+        if header_end_idx < 0
+            let sep = proto_find_bytes(raw, [13, 10, 13, 10], 0)
+            if sep >= 0
+                header_end_idx = sep + 4
+                let hlen = https_header_content_length(raw, sep)
+                if hlen >= 0
+                    content_length = hlen
+                end
+            end
+        end
+        if header_end_idx >= 0 and content_length >= 0
+            if len(raw) - header_end_idx >= content_length
+                break
+            end
+        end
+        if len(raw) > 8388608
+            break
+        end
+        guard += 1
+    end
+    tls::close(full)
+
+    let resp = http_parse_response_bytes(raw)
+    if follow == 1 and http_is_redirect(resp.status_code) and max_redirs > 0
+        let loc = header_get(resp.headers, "location", "")
+        if loc != ""
+            let next_url = url_pkg::url_join(url_str, loc)
+            client.max_redirects = max_redirs - 1
+            return https_execute(client, "GET", next_url, extra_headers, "")
+        end
+    end
+    return resp
+end
+
+## Reads Content-Length from raw head bytes (-1 when absent)
+pub function https_header_content_length(raw, head_len: int) -> int
+    let head = []
+    let i = 0
+    while i < head_len and i < len(raw)
+        head.push(raw[i])
+        i += 1
+    end
+    let text = lower(crypto::bytes_to_str(head))
+    let idx = _proto_find(text, "content-length:", 0)
+    if idx < 0
+        return -1
+    end
+    let val_start = idx + 15
+    let val_end = _proto_find(text, "\r\n", val_start)
+    if val_end < 0
+        val_end = _proto_find(text, "\n", val_start)
+    end
+    if val_end < 0
+        return -1
+    end
+    return to_int(trim(substring(text, val_start, val_end - val_start)))
+end

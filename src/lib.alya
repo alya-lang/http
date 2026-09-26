@@ -18,6 +18,7 @@ import "./core/compression.alya"
 import "./server/context.alya"
 import "./server/server.alya"
 import "./client/client.alya"
+import "./client/tls_client.alya"
 import "./client/methods.alya"
 import "./websocket/handshake.alya"
 import "./websocket/frame.alya"
@@ -49,8 +50,8 @@ pub function group(router_inst, prefix: string)
 end
 
 ## Creates a new HTTP client.
-pub function client(timeout_ms: int = 10000, follow_redirects: int = 1, max_redirects: int = 5)
-    return client_new(timeout_ms, follow_redirects, max_redirects)
+pub function client(timeout_ms: int = 10000, follow_redirects: int = 1, max_redirects: int = 5, tls_verify: int = 1)
+    return client_new(timeout_ms, follow_redirects, max_redirects, tls_verify)
 end
 
 ## Creates a new HttpRequest struct instance.

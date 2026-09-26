@@ -96,13 +96,15 @@ end
 ## - `status_code`: Numeric status integer.
 ## - `status_text`: Reason phrase string.
 ## - `headers`: Header map.
-## - `body`: Body payload value.
+## - `body`: Body payload value (string for text; empty when binary).
+## - `body_bytes`: Full body as byte array (source of truth for binary).
 ## - `cookies`: Cookie array.
 pub struct HttpResponse
     status_code: int,
     status_text: string,
     headers: map,
     body,
+    body_bytes: array,
     cookies: array
 end
 
@@ -193,11 +195,13 @@ end
 ## - `headers`: Default header map.
 ## - `follow_redirects`: `1` follows redirects, `0` otherwise.
 ## - `max_redirects`: Redirect hop limit integer.
+## - `tls_verify`: `1` verifies HTTPS certificates (default), `0` skips.
 pub struct HttpClient
     timeout_ms: int,
     headers: map,
     follow_redirects: int,
-    max_redirects: int
+    max_redirects: int,
+    tls_verify: int
 end
 
 ## Factory for creating an HttpCookie instance.
@@ -280,18 +284,23 @@ end
 ## - `status_text`: Reason phrase. Defaults to `"OK"`.
 ## - `headers`: Header map (defaults to empty when null).
 ## - `body`: Body payload value. Defaults to `""`.
+## - `body_bytes`: Full body byte array (defaults to empty).
 ##
 ## ### Returns
 ## The new `HttpResponse` instance.
-pub function response_create(status_code: int = 200, status_text: string = "OK", headers = null, body: string = "") -> HttpResponse
+pub function response_create(status_code: int = 200, status_text: string = "OK", headers = null, body: string = "", body_bytes = null) -> HttpResponse
     if headers is null
         headers = {}
+    end
+    if body_bytes is null
+        body_bytes = []
     end
     return HttpResponse {
         status_code: status_code,
         status_text: status_text,
         headers: headers,
         body: body,
+        body_bytes: body_bytes,
         cookies: []
     }
 end

@@ -15,6 +15,7 @@ Production-ready HTTP client, server, router, compression, and middleware toolki
 - 🔌 **RFC 6455 WebSockets**: Full-duplex WebSocket server and client connections. Automatic handshake negotiation (`101 Switching Protocols`), RFC test-vector verified framing (text, binary, ping, pong, close), and callback-driven protocol drivers (`ws_on_message`, `ws_send`, etc.).
 - 🗜️ **Web Compression Toolkit**: Native integration with `compress` supporting **Brotli (`br`)**, **Zstandard (`zstd`)**, **Gzip (`gzip`)**, and **Deflate (`deflate`)**. Automatic `Accept-Encoding` negotiation, server response compression middleware, pre-compressed static asset serving (`.br` and `.gz`), and client decompression.
 - 🌐 **Full HTTP Client**: Supports GET, POST, PUT, DELETE, PATCH, HEAD, and OPTIONS with custom headers, query params, timeout handling, and automatic redirect following.
+- 🔒 **Native HTTPS**: Real TLS 1.2 via `alya-lang/tls` (RSA key exchange, certificate verification, binary-safe bodies) — no subprocess, no shell, no temp files. Verified live against OpenSSL and Python TLS servers.
 - 🚀 **HTTP Server & Context**: Built on low-level TCP sockets (`std/net`) or non-blocking event loops, offering intuitive request context (`HttpContext`), JSON responses, text responses, file serving, and status helpers.
 - 🛣️ **Parametric Router & Route Groups**: Fast URL pattern matching with wildcard (`*path`) and named parameters (`:id`), plus subrouter groups with shared path prefixes and middleware chains.
 - 🛡️ **Extensible Middleware**: Out-of-the-box middleware for Compression (`mw_apply_compression`), CORS (`cors_middleware`), request logging (`logger_middleware`), panic recovery (`recovery_middleware`), and static file serving (`static_middleware`).
@@ -50,6 +51,7 @@ http/
 │   │   └── connection.alya # High-level WebSocket bidirectional connection driver
 │   ├── client/
 │   │   ├── client.alya     # HttpClient implementation with socket IO and redirect loop
+│   │   ├── tls_client.alya # Native HTTPS via alya-lang/tls (no curl bridge)
 │   │   └── methods.alya    # Convenience functions (http_get, http_post, etc.)
 │   └── middleware/
 │       ├── compress.alya   # HTTP response compression middleware (Brotli, Zstd, Gzip, Deflate)
@@ -60,12 +62,13 @@ http/
 ├── examples/
 │   ├── compression_demo.alya # Dedicated HTTP compression showcase
 │   └── demo.alya           # Comprehensive usage demo
-├── tests/                  # 14 comprehensive test suites (100% passing)
+├── tests/                  # 15 comprehensive test suites (100% passing)
 │   ├── test_client.alya
 │   ├── test_compression.alya
 │   ├── test_context.alya
 │   ├── test_cookies.alya
 │   ├── test_headers.alya
+│   ├── test_https.alya
 │   ├── test_middleware.alya
 │   ├── test_protocol.alya
 │   ├── test_reactive_server.alya
