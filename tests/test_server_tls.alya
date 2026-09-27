@@ -1,0 +1,37 @@
+## Test suite for HTTPS server TLS wiring (offline, no sockets)
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+import "std/test"
+import "../src/lib.alya" as http
+
+function main()
+    test_suite("HTTP Server TLS Tests")
+    let r = runner_new()
+
+    # 1. TLS off by default
+    let s = http::server_new(9871, "127.0.0.1")
+    runner_assert_eq(r, http::server_has_tls(s), 0, "tls off by default")
+
+    # 2. Enable stores identity material
+    http::server_enable_tls(s, "CERT-PEMDATA", "KEY-PEMDATA")
+    runner_assert_eq(r, http::server_has_tls(s), 1, "tls on after enable")
+
+    # 3. Empty material does not enable
+    let s2 = http::server_new(9872, "127.0.0.1")
+    http::server_enable_tls(s2, "", "")
+    runner_assert_eq(r, http::server_has_tls(s2), 0, "empty pem stays off")
+
+    # 4. Null-safe guards
+    runner_assert_eq(r, http::server_has_tls(null), 0, "null server safe")
+    runner_assert_eq(r, http::server_send(s, null), 0, "null ctx send safe")
+
+    # 5. Plaintext close path unaffected
+    http::server_close(s)
+    runner_assert_eq(r, s.running, 0, "close stops server")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()
