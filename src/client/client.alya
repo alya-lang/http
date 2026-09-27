@@ -115,14 +115,16 @@ pub function client_execute(client, method, url_str: string, extra_headers = nul
     net::tcp_set_timeout(sock, timeout_ms)
 
     let path = parsed.path
+    let path_fallback = 0
     if path == ""
         path = parsed.url_path
+        path_fallback = 1
     end
     if path == ""
         path = "/"
     end
     let q = parsed.query
-    if q == ""
+    if q == "" and path_fallback == 1
         q = parsed.url_query
     end
     if q != ""

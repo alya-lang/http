@@ -12,11 +12,11 @@ keywords = ["alya", "alya-lang", "package", "http", "https", "server", "client",
 
 [dependencies]
 compress = { git = "https://github.com/alya-lang/compress", tag = "v0.1.0" }
-crypto = { git = "https://github.com/alya-lang/crypto", tag = "v0.5.0" }
+crypto = { git = "https://github.com/alya-lang/crypto", tag = "v0.6.0" }
 event = { git = "https://github.com/alya-lang/event", tag = "v0.1.0" }
 mime = { git = "https://github.com/alya-lang/mime", tag = "v0.1.0" }
 url = { git = "https://github.com/alya-lang/url", tag = "v0.1.0" }
-tls = { git = "https://github.com/alya-lang/tls", tag = "v0.3.0" }
+tls = { git = "https://github.com/alya-lang/tls", tag = "v0.4.0" }
 
 # [lint]
 # disabled_rules = []
