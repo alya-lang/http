@@ -14,8 +14,11 @@ import "../core/headers.alya"
 import "../router/router.alya"
 import "../middleware/cors.alya"
 import "../middleware/logger.alya"
+@cfg(feature = "mime")
 import "../middleware/static.alya"
+@cfg(feature = "compress")
 import "../middleware/compress.alya"
+@cfg(feature = "compress")
 import "../core/compression.alya"
 import "./context.alya"
 
@@ -66,7 +69,10 @@ pub function server_enable_static(server, url_prefix: string, local_dir: string)
     return server
 end
 
-## Enables response compression middleware on the server (Brotli, Zstd, Gzip, Deflate)
+## Enables response compression middleware on the server (Brotli, Zstd, Gzip, Deflate).
+##
+## Requires the `compress` feature (default-on).
+@cfg(feature = "compress")
 pub function server_enable_compression(server, min_length: int = 256)
     server.options["compression_enabled"] = 1
     server.options["compression_config"] = compression_config_new(min_length)
@@ -247,7 +253,8 @@ pub function server_process(server, ctx)
         end
     end
 
-    # Serve static files if enabled
+    # Serve static files if enabled (needs the `mime` feature)
+    @cfg(feature = "mime")
     if server.options["static_enabled"] == 1
         let prefix = server.options["static_prefix"]
         let dir = server.options["static_dir"]
@@ -285,7 +292,8 @@ pub function server_send(server, ctx)
         return 0
     end
 
-    # Apply compression if enabled
+    # Apply compression if enabled (needs the `compress` feature)
+    @cfg(feature = "compress")
     if server is not null and server.options["compression_enabled"] == 1
         mw_apply_compression(ctx, server.options["compression_config"])
     end

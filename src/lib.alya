@@ -12,8 +12,11 @@ import "./router/group.alya"
 import "./middleware/cors.alya"
 import "./middleware/logger.alya"
 import "./middleware/recovery.alya"
+@cfg(feature = "mime")
 import "./middleware/static.alya"
+@cfg(feature = "compress")
 import "./middleware/compress.alya"
+@cfg(feature = "compress")
 import "./core/compression.alya"
 import "./server/context.alya"
 import "./server/server.alya"
@@ -23,6 +26,7 @@ import "./client/methods.alya"
 import "./websocket/handshake.alya"
 import "./websocket/frame.alya"
 import "./websocket/connection.alya"
+@cfg(feature = "event")
 import "./server/reactive.alya"
 
 # ═══════════════════════════════════════════════════════════════
@@ -85,16 +89,25 @@ pub function cors(origin: string = "*", methods = "GET, POST, PUT, DELETE, OPTIO
 end
 
 ## Creates a new Compression config.
+##
+## Requires the `compress` feature (default-on).
+@cfg(feature = "compress")
 pub function compression(min_length: int = 256)
     return compression_config_new(min_length)
 end
 
 ## Compresses payload string with given algorithm ("gzip", "br", "deflate", "zstd").
+##
+## Requires the `compress` feature (default-on).
+@cfg(feature = "compress")
 pub function compress(data_str, encoding: string = "gzip")
     return http_compress(data_str, encoding)
 end
 
 ## Decompresses byte list with given algorithm into string.
+##
+## Requires the `compress` feature (default-on).
+@cfg(feature = "compress")
 pub function decompress(bytes_list, encoding: string = "gzip")
     return http_decompress(bytes_list, encoding)
 end
@@ -160,6 +173,9 @@ pub function recovery(ctx, err_message: string = "Internal Server Error")
 end
 
 ## Serves a static file for an HttpContext from a local directory.
+##
+## Requires the `mime` feature (default-on).
+@cfg(feature = "mime")
 pub function serve_static(ctx, url_prefix: string, local_dir: string)
     return mw_serve_static(ctx, url_prefix, local_dir)
 end
@@ -180,6 +196,9 @@ pub function split_path(path: string) -> array
 end
 
 ## Creates and binds an event-driven reactive HTTP/WebSocket server to an EventLoop.
+##
+## Requires the `event` feature (default-on).
+@cfg(feature = "event")
 pub function reactive_server(loop, port: int = 8080, host: string = "0.0.0.0", router_inst = null, on_request = null, on_websocket = null)
     let s = server_new(port, host, router_inst)
     return server_use_event_loop(s, loop, on_request, on_websocket)

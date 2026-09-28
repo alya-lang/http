@@ -54,28 +54,45 @@ function main()
     runner_assert_str_eq(r, log_str, "[HTTP] POST /users 201 - 15ms (192.168.1.100)", "mw_format_log")
 
     # 5. Static files directory traversal rejection
+    @cfg(feature = "mime")
     let req_trav = http::request_create("GET", "/assets/../../etc/passwd")
+    @cfg(feature = "mime")
     let ctx4 = http::ctx_new(req_trav)
+    @cfg(feature = "mime")
     let trav_handled = http::mw_serve_static(ctx4, "/assets", ".")
 
+    @cfg(feature = "mime")
     runner_assert_eq(r, trav_handled, 1, "traversal attempt caught")
+    @cfg(feature = "mime")
     let res4 = ctx4.res
+    @cfg(feature = "mime")
     let sc4 = res4.status_code
+    @cfg(feature = "mime")
     runner_assert_eq(r, sc4, 403, "traversal responds with 403")
 
     # 6. Compression middleware
+    @cfg(feature = "compress")
     let comp_cfg = http::compression(30)
     let req_comp = http::request_create("GET", "/api/data")
     http::header_set(req_comp.headers, "Accept-Encoding", "gzip, deflate, br")
     let ctx5 = http::ctx_new(req_comp)
     http::ctx_text(ctx5, "Alya is a modern, high-performance programming language designed for fast systems and clean web development.")
+    @cfg(feature = "compress")
     let comp_applied = http::mw_apply_compression(ctx5, comp_cfg)
+    @cfg(feature = "compress")
     runner_assert_eq(r, comp_applied, 1, "compression middleware applied")
+    @cfg(feature = "compress")
     let res5 = ctx5.res
+    @cfg(feature = "compress")
     let h5 = res5.headers
+    @cfg(feature = "compress")
     let enc5 = http::header_get(h5, "Content-Encoding")
+    @cfg(feature = "compress")
     runner_assert_str_eq(r, enc5, "br", "compression middleware picked Brotli")
+    @cfg(feature = "compress")
+    @cfg(feature = "compress")
     let vary5 = http::header_get(h5, "Vary")
+    @cfg(feature = "compress")
     runner_assert_str_eq(r, vary5, "Accept-Encoding", "compression middleware set Vary header")
 
     let failed = runner_summary(r)

@@ -28,6 +28,7 @@ function handle_ws_session(ws, _req)
     http::ws_on_message(ws, handle_ws_msg)
 end
 
+@cfg(feature = "event")
 function main()
     test_suite("Reactive HTTP & WebSocket Server Tests")
     let r = runner_new()
@@ -192,6 +193,18 @@ function main()
     http::server_close_reactive(srv)
     runner_assert_eq(r, srv.running, 0, "server stopped")
 
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+# Needs the feature: register an empty suite so the file still
+# compiles and passes in slim views.
+@cfg(not(feature = "event"))
+function main()
+    test_suite("Reactive HTTP & WebSocket Server Tests (skipped without event feature)")
+    let r = runner_new()
     let failed = runner_summary(r)
     if failed > 0
         exit(1)

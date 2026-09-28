@@ -6,6 +6,7 @@
 
 import "../src/lib.alya" as http
 
+@cfg(feature = "compress")
 function main()
     say "=== alya-lang/http Compression Showcase ===\n"
 
@@ -65,6 +66,12 @@ function main()
     say "     - Static assets route   : /assets -> ./public (supports .br and .gz)"
 
     say "\nAll compression features operational!"
+end
+
+# Needs the feature: print a note so the slim demo stays runnable.
+@cfg(not(feature = "compress"))
+function main()
+    say "compression demo needs the `compress` feature (rebuild with default features)"
 end
 
 main()

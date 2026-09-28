@@ -6,6 +6,7 @@ import "std/test"
 import "std/fs"
 import "../src/lib.alya" as http
 
+@cfg(feature = "compress")
 function main()
     test_suite("HTTP Compression Tests")
     let r = runner_new()
@@ -150,6 +151,18 @@ function main()
     let s_cfg = s_opt["compression_config"]
     runner_assert_eq(r, s_cfg.min_length, 512, "server options min_length 512")
 
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+# Needs the feature: register an empty suite so the file still
+# compiles and passes in slim views.
+@cfg(not(feature = "compress"))
+function main()
+    test_suite("HTTP Compression Tests (skipped without compress feature)")
+    let r = runner_new()
     let failed = runner_summary(r)
     if failed > 0
         exit(1)

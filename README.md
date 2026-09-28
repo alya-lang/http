@@ -100,6 +100,26 @@ alya add http --git https://github.com/alya-lang/http --branch main
 alya install
 ```
 
+### Package Features
+
+| Feature | Default | Description |
+|:---|:---:|:---|
+| `compress` | ✅ | Response compression middleware (`compression()`, `compress()`/`decompress()`, `server_enable_compression`). Needs `Lib/compress`. |
+| `event` | ✅ | Event-driven reactive server (`reactive_server`). Needs `Lib/event`. |
+| `mime` | ✅ | Static file serving (`serve_static`, `mw_serve_static`). Needs `Lib/mime`. |
+
+`crypto`, `url`, and `tls` stay required: WebSocket handshakes need SHA-1, clients need URL parsing, and TLS paths are woven through the server/client cores.
+
+```bash
+# Full build (default)
+alya install
+alya test
+
+# Slim build (core client/server/router/middleware without the above)
+alya install --no-default-features
+alya test --no-default-features
+```
+
 ---
 
 ## 🚀 Quick Start

@@ -44,16 +44,25 @@ let payload = "{\"status\":\"ok\",\"description\":\"Alya HTTP provides native co
 say "\n--- HTTP Compression ---"
 say "Original Payload Size : " + str(len(payload)) + " bytes"
 
+@cfg(feature = "compress")
 let negotiated = http::http_negotiate_encoding("gzip, deflate, br;q=0.9")
+@cfg(feature = "compress")
 say "Negotiated Encoding   : " + negotiated + " (chosen based on client Accept-Encoding)"
 
+@cfg(feature = "compress")
 let br_comp = http::compress(payload, "br")
+@cfg(feature = "compress")
 say "Brotli Compressed Size: " + str(len(br_comp)) + " bytes"
 
+@cfg(feature = "compress")
 let gz_comp = http::compress(payload, "gzip")
+@cfg(feature = "compress")
 say "Gzip Compressed Size  : " + str(len(gz_comp)) + " bytes"
 
+@cfg(feature = "compress")
 let restored = http::decompress(br_comp, "br")
+@cfg(feature = "compress")
 say "Decompressed Valid?   : " + str(restored == payload)
 
+@cfg(feature = "compress")
 say "\nAll alya-lang/http features operational!"
