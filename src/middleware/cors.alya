@@ -34,7 +34,7 @@ end
 ## Returns 1 if request was preflight and aborted, 0 if request should continue.
 pub function mw_apply_cors(ctx, config = null)
     if ctx is null
-        return 0
+        return false
     end
 
     if config is null
@@ -46,7 +46,7 @@ pub function mw_apply_cors(ctx, config = null)
     header_set(res.headers, "Access-Control-Allow-Methods", config.allow_methods)
     header_set(res.headers, "Access-Control-Allow-Headers", config.allow_headers)
 
-    if config.allow_credentials == 1
+    if config.allow_credentials == true
         header_set(res.headers, "Access-Control-Allow-Credentials", "true")
     end
 
@@ -60,8 +60,8 @@ pub function mw_apply_cors(ctx, config = null)
         res.status_text = "No Content"
         res.body = ""
         ctx.aborted = 1
-        return 1
+        return true
     end
 
-    return 0
+    return false
 end

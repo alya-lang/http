@@ -28,15 +28,15 @@ end
 ## Returns 1 when a frame has the final fragment flag.
 pub function ws_frame_is_final(frame) -> int
     if frame is null
-        return 0
+        return false
     end
-    return frame.fin == 1
+    return frame.fin == true
 end
 
 ## Returns 1 for text frames.
 pub function ws_frame_is_text(frame) -> int
     if frame is null
-        return 0
+        return false
     end
     return frame.opcode == WebSocketOpCode.Text
 end
@@ -44,7 +44,7 @@ end
 ## Returns 1 for binary frames.
 pub function ws_frame_is_binary(frame) -> int
     if frame is null
-        return 0
+        return false
     end
     return frame.opcode == WebSocketOpCode.Binary
 end
@@ -52,7 +52,7 @@ end
 ## Returns 1 for close frames.
 pub function ws_frame_is_close(frame) -> int
     if frame is null
-        return 0
+        return false
     end
     return frame.opcode == WebSocketOpCode.Close
 end
@@ -60,7 +60,7 @@ end
 ## Returns 1 for ping frames.
 pub function ws_frame_is_ping(frame) -> int
     if frame is null
-        return 0
+        return false
     end
     return frame.opcode == WebSocketOpCode.Ping
 end
@@ -68,7 +68,7 @@ end
 ## Returns 1 for pong frames.
 pub function ws_frame_is_pong(frame) -> int
     if frame is null
-        return 0
+        return false
     end
     return frame.opcode == WebSocketOpCode.Pong
 end
@@ -76,7 +76,7 @@ end
 ## Returns 1 for control frames.
 pub function ws_frame_is_control(frame) -> int
     if frame is null
-        return 0
+        return false
     end
     return frame.opcode >= 8
 end
@@ -181,13 +181,13 @@ pub function ws_frame_encode(opcode: int, payload: string = "", is_final: int = 
     let plen = len(payload)
 
     let b0 = bit_and(opcode, 15)
-    if is_final == 1
+    if is_final == true
         b0 = bit_or(b0, 128)
     end
 
-    let mask_bit = 0
+    let mask_bit = false
     let effective_mask_key = [53, 102, 169, 212]
-    if mask == 1
+    if mask == true
         mask_bit = 128
         if mask_key is not null and len(mask_key) >= 4
             effective_mask_key = mask_key
@@ -214,7 +214,7 @@ pub function ws_frame_encode(opcode: int, payload: string = "", is_final: int = 
         header_bytes.push(bit_and(plen, 255))
     end
 
-    if mask == 1
+    if mask == true
         header_bytes.push(effective_mask_key[0])
         header_bytes.push(effective_mask_key[1])
         header_bytes.push(effective_mask_key[2])
@@ -226,7 +226,7 @@ pub function ws_frame_encode(opcode: int, payload: string = "", is_final: int = 
         wire = wire + chr(b)
     end
 
-    if mask == 1
+    if mask == true
         let masked_payload = ""
         let k = 0
         while k < plen
@@ -330,7 +330,7 @@ pub function ws_frame_parse(raw_data, offset: int = 0)
     end
 
     let mask_key = []
-    if masked == 1
+    if masked == true
         if raw_len < header_len + 4
             return [null, 0]
         end
@@ -350,7 +350,7 @@ pub function ws_frame_parse(raw_data, offset: int = 0)
     let payload_raw = substring(raw_data, offset + header_len, plen)
     let payload = ""
 
-    if masked == 1
+    if masked == true
         let i = 0
         while i < plen
             let c = bit_xor(ord(char_at(payload_raw, i)), mask_key[i % 4])

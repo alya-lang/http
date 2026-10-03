@@ -35,7 +35,7 @@ end
 ## Toggles HTTPS certificate verification (1 required, 0 skipped for local dev)
 pub function client_set_tls_verify(client, verify: int)
     if client is not null
-        if verify == 0
+        if verify == false
             client.tls_verify = 0
         else
             client.tls_verify = 1
@@ -124,7 +124,7 @@ pub function client_execute(client, method, url_str: string, extra_headers = nul
         path = "/"
     end
     let q = parsed.query
-    if q == "" and path_fallback == 1
+    if q == "" and path_fallback == true
         q = parsed.url_query
     end
     if q != ""

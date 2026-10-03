@@ -11,12 +11,12 @@ end
 
 function mock_write(stream, data)
     stream.written = stream.written + data
-    return 1
+    return true
 end
 
 function mock_close(stream)
-    stream.closed = 1
-    return 1
+    stream.closed = true
+    return true
 end
 
 struct TestStore

@@ -90,7 +90,7 @@ pub function https_execute(client, method, url_str: string, extra_headers = null
         path = "/"
     end
     let q = parsed.query
-    if q == "" and path_fallback == 1
+    if q == "" and path_fallback == true
         q = parsed.url_query
     end
     if q != ""
@@ -100,7 +100,7 @@ pub function https_execute(client, method, url_str: string, extra_headers = null
     let cfg = tls::config(host, port)
     cfg.timeout_ms = timeout_ms
     cfg.cipher_allowlist = [tls::SUITE_ECDHE_RSA_AES128_GCM_SHA256, tls::SUITE_RSA_AES128_GCM_SHA256]
-    if verify == 0
+    if verify == false
         cfg = cfg.with_verify(tls::TlsVerifyMode.None)
     end
     let ctx = tls::connect(cfg)

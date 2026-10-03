@@ -84,13 +84,13 @@ end
 
 function _ws_raw_close(ws: WebSocketConnection)
     if ws is null or ws.stream is null
-        return 0
+        return false
     end
     let c_fn = ws.close_fn
     if c_fn is not null
         return c_fn(ws.stream)
     end
-    return 0
+    return false
 end
 
 # ═══════════════════════════════════════════════════════════════
@@ -100,9 +100,9 @@ end
 ## Transmits a UTF-8 text message over the WebSocket connection
 pub function ws_send(ws: WebSocketConnection, text: string)
     if ws is null or ws.state != WebSocketState.Open
-        return 0
+        return false
     end
-    let mask = ws.is_server == 1 ? 0 : 1
+    let mask = ws.is_server == true ? false : true
     let wire = ws_encode_text(text, mask)
     return _ws_raw_write(ws, wire)
 end
@@ -110,9 +110,9 @@ end
 ## Transmits a binary message over the WebSocket connection
 pub function ws_send_binary(ws: WebSocketConnection, data)
     if ws is null or ws.state != WebSocketState.Open
-        return 0
+        return false
     end
-    let mask = ws.is_server == 1 ? 0 : 1
+    let mask = ws.is_server == true ? false : true
     let wire = ws_encode_binary(data, mask)
     return _ws_raw_write(ws, wire)
 end
@@ -120,9 +120,9 @@ end
 ## Sends a ping heartbeat frame over the WebSocket connection
 pub function ws_ping(ws: WebSocketConnection, data: string = "")
     if ws is null or ws.state != WebSocketState.Open
-        return 0
+        return false
     end
-    let mask = ws.is_server == 1 ? 0 : 1
+    let mask = ws.is_server == true ? false : true
     let wire = ws_encode_ping(data, mask)
     return _ws_raw_write(ws, wire)
 end
@@ -130,9 +130,9 @@ end
 ## Sends a pong heartbeat frame over the WebSocket connection
 pub function ws_pong(ws: WebSocketConnection, data: string = "")
     if ws is null or ws.state != WebSocketState.Open
-        return 0
+        return false
     end
-    let mask = ws.is_server == 1 ? 0 : 1
+    let mask = ws.is_server == true ? false : true
     let wire = ws_encode_pong(data, mask)
     return _ws_raw_write(ws, wire)
 end
@@ -140,9 +140,9 @@ end
 ## Initiates or completes a WebSocket close handshake
 pub function ws_close(ws: WebSocketConnection, code: int = 1000, reason: string = "")
     if ws is null or ws.state == WebSocketState.Closed
-        return 0
+        return false
     end
-    let mask = ws.is_server == 1 ? 0 : 1
+    let mask = ws.is_server == true ? false : true
     let wire = ws_encode_close(code, reason, mask)
     _ws_raw_write(ws, wire)
 
@@ -153,7 +153,7 @@ pub function ws_close(ws: WebSocketConnection, code: int = 1000, reason: string 
     if cb is not null
         cb(ws, code, reason)
     end
-    return 1
+    return true
 end
 
 # ═══════════════════════════════════════════════════════════════
@@ -163,7 +163,7 @@ end
 ## Feeds incoming network data into the connection buffer and processes all frames
 pub function ws_feed(ws: WebSocketConnection, chunk)
     if ws is null or chunk is null or len(chunk) == 0
-        return 0
+        return false
     end
 
     ws.buffer = ws.buffer + chunk
@@ -174,7 +174,7 @@ pub function ws_feed(ws: WebSocketConnection, chunk)
         let frame = parsed[0]
         let consumed = parsed[1]
 
-        if frame is null or consumed == 0
+        if frame is null or consumed == false
             # Buffer contains partial frame, wait for more chunks
             break
         end

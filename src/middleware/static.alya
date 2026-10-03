@@ -48,7 +48,7 @@ end
 ## Returns 1 if file was found and served, 0 otherwise.
 pub function mw_serve_static(ctx, url_prefix: string, local_dir: string)
     if ctx is null or ctx.req is null
-        return 0
+        return false
     end
 
     let req_path = ctx.req.path
@@ -56,7 +56,7 @@ pub function mw_serve_static(ctx, url_prefix: string, local_dir: string)
 
     # Check if request path begins with url_prefix
     if len(req_path) < pre_len or substring(req_path, 0, pre_len) != url_prefix
-        return 0
+        return false
     end
 
     let rel_path = substring(req_path, pre_len, len(req_path) - pre_len)
@@ -73,10 +73,10 @@ pub function mw_serve_static(ctx, url_prefix: string, local_dir: string)
         res.body = "Forbidden"
         header_set(res.headers, "Content-Type", "text/plain")
         ctx.aborted = 1
-        return 1
+        return true
     end
 
-    if file_exists(full_path) == 1
+    if file_exists(full_path) == true
         let ctype = mime_pkg::content_type(full_path, "application/octet-stream")
         let res = ctx.res
         let accept_enc = ""
@@ -95,7 +95,7 @@ pub function mw_serve_static(ctx, url_prefix: string, local_dir: string)
             header_set(res.headers, "Vary", "Accept-Encoding")
             header_set(res.headers, "Content-Length", str(len(content)))
             ctx.aborted = 1
-            return 1
+            return true
         end
 
         # Pre-compressed assets: Gzip (.gz)
@@ -109,7 +109,7 @@ pub function mw_serve_static(ctx, url_prefix: string, local_dir: string)
             header_set(res.headers, "Vary", "Accept-Encoding")
             header_set(res.headers, "Content-Length", str(len(content)))
             ctx.aborted = 1
-            return 1
+            return true
         end
 
         # Uncompressed standard file
@@ -120,8 +120,8 @@ pub function mw_serve_static(ctx, url_prefix: string, local_dir: string)
         header_set(res.headers, "Content-Type", ctype)
         header_set(res.headers, "Content-Length", str(len(content)))
         ctx.aborted = 1
-        return 1
+        return true
     end
 
-    return 0
+    return false
 end

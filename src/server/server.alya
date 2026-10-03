@@ -105,17 +105,17 @@ end
 ## Returns 1 when TLS is enabled with identity material configured.
 pub function server_has_tls(server) -> int
     if server is null or server.options is null
-        return 0
+        return false
     end
-    if server.options["tls_enabled"] != 1
-        return 0
+    if server.options["tls_enabled"] != true
+        return false
     end
     let cert = server.options["tls_cert_pem"]
     let key = server.options["tls_key_pem"]
     if cert is null or cert == "" or key is null or key == ""
-        return 0
+        return false
     end
-    return 1
+    return true
 end
 
 ## Starts the TCP server socket listening on configured port
@@ -123,7 +123,7 @@ pub function server_start(server, backlog: int = 128)
     if server is null
         return -1
     end
-    if server_has_tls(server) == 1
+    if server_has_tls(server) == true
         let tls_srv = tls::server(server.port, server.host)
         tls::tls_server_enable_tls(tls_srv, server.options["tls_cert_pem"], server.options["tls_key_pem"], 0)
         let lsock = tls::tls_server_start(tls_srv, backlog)
@@ -155,7 +155,7 @@ pub function server_accept(server, timeout_ms: int = 1000)
         return null
     end
 
-    if server_has_tls(server) == 1 and server.options["tls_server"] is not null
+    if server_has_tls(server) == true and server.options["tls_server"] is not null
         let tls_srv = server.options["tls_server"]
         let tls_ctx = tls::tls_accept_handshake(tls_srv, timeout_ms)
         if tls_ctx is null or tls_ctx.last_error != ""
@@ -195,7 +195,7 @@ pub function server_accept(server, timeout_ms: int = 1000)
     end
 
     let ready = net::tcp_poll(server.server_sock, timeout_ms)
-    if ready != 1
+    if ready != true
         return null
     end
 
@@ -246,27 +246,27 @@ pub function server_process(server, ctx)
     end
 
     # Apply CORS middleware if enabled
-    if server.options["cors_enabled"] == 1
+    if server.options["cors_enabled"] == true
         let preflight = mw_apply_cors(ctx, server.options["cors_config"])
-        if preflight == 1
+        if preflight == true
             return RouteMatch { found: 1, action: "cors_preflight", route: "", params: {}, status: 204, allowed_methods: [] }
         end
     end
 
     # Serve static files if enabled (needs the `mime` feature)
     @cfg(feature = "mime")
-    if server.options["static_enabled"] == 1
+    if server.options["static_enabled"] == true
         let prefix = server.options["static_prefix"]
         let dir = server.options["static_dir"]
         let served = mw_serve_static(ctx, prefix, dir)
-        if served == 1
+        if served == true
             return RouteMatch { found: 1, action: "static_file", route: "", params: {}, status: 200, allowed_methods: [] }
         end
     end
 
     # Route matching
     let m = router_match(server.router, ctx.req.method, ctx.req.path)
-    if m.found == 1
+    if m.found == true
         let req = ctx.req
         req.params = m.params
     elif m.status == 405
@@ -289,37 +289,37 @@ end
 ## TLS contexts send through the encrypted channel and close the TLS session.
 pub function server_send(server, ctx)
     if ctx is null or ctx.client_sock < 0
-        return 0
+        return false
     end
 
     # Apply compression if enabled (needs the `compress` feature)
     @cfg(feature = "compress")
-    if server is not null and server.options["compression_enabled"] == 1
+    if server is not null and server.options["compression_enabled"] == true
         mw_apply_compression(ctx, server.options["compression_config"])
     end
 
     # Log request if logger is enabled
-    if server is not null and server.options["logger_enabled"] == 1
+    if server is not null and server.options["logger_enabled"] == true
         mw_log_context(ctx)
     end
 
-    if ctx.data is not null and ctx.data["tls_enabled"] == 1 and ctx.data["tls_ctx"] is not null
+    if ctx.data is not null and ctx.data["tls_enabled"] == true and ctx.data["tls_ctx"] is not null
         let tls_ctx = ctx.data["tls_ctx"]
         let wire = http_format_response(ctx.res)
         let rc = tls::tls_send_encrypted(tls_ctx, crypto::str_to_bytes(wire))
         tls::close(tls_ctx)
         ctx.client_sock = -1
         if rc < 0
-            return 0
+            return false
         end
-        return 1
+        return true
     end
 
     let wire = http_format_response(ctx.res)
     net::tcp_send(ctx.client_sock, wire)
     net::tcp_close(ctx.client_sock)
     ctx.client_sock = -1
-    return 1
+    return true
 end
 
 ## Stops the HTTP server and releases socket resources
@@ -335,5 +335,5 @@ pub function server_close(server)
         end
         server.running = 0
     end
-    return 0
+    return false
 end

@@ -32,21 +32,21 @@ end
 ## Determines whether the given HttpRequest is a valid WebSocket upgrade request.
 pub function ws_is_upgrade_request(req)
     if req is null or req.headers is null
-        return 0
+        return false
     end
     let upgrade = header_get(req.headers, "Upgrade")
     if upgrade is null or lower(upgrade) != "websocket"
-        return 0
+        return false
     end
     let conn = header_get(req.headers, "Connection")
     if conn is null or index_of(lower(conn), "upgrade") < 0
-        return 0
+        return false
     end
     let sec_key = header_get(req.headers, "Sec-WebSocket-Key")
     if sec_key is null or len(sec_key) == 0
-        return 0
+        return false
     end
-    return 1
+    return true
 end
 
 ## Builds the HTTP 101 Switching Protocols handshake wire response.

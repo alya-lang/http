@@ -97,11 +97,11 @@ pub function _arr_has(arr, item)
     let i = 0
     while i < len(arr)
         if arr[i] == item
-            return 1
+            return true
         end
         i += 1
     end
-    return 0
+    return false
 end
 
 ## Matches a request method and path against registered routes.
@@ -131,11 +131,11 @@ pub function router_match(r, method, path: string)
     while i < r_count
         let rt = r.routes[i]
         let res = route_match_segments(rt.segments, req_segs)
-        if res["matched"] == 1
+        if res["matched"] == true
             if rt.method == req_method or rt.method == "ANY" or rt.method == "*"
                 return RouteMatch { found: 1, action: rt.action, route: rt.pattern, params: res["params"], status: 200, allowed_methods: [] }
             else
-                if _arr_has(allowed_methods, rt.method) == 0
+                if _arr_has(allowed_methods, rt.method) == false
                     push(allowed_methods, rt.method)
                 end
             end

@@ -35,11 +35,11 @@ pub function cookie_format(c: HttpCookie) -> string
         res = res + "; Expires=" + c.expires
     end
 
-    if c.http_only == 1
+    if c.http_only == true
         res = res + "; HttpOnly"
     end
 
-    if c.secure == 1
+    if c.secure == true
         res = res + "; Secure"
     end
 

@@ -81,22 +81,22 @@ end
 ## Checks whether a header key exists (case-insensitive).
 pub function header_has(headers, key: string) -> int
     if headers is null or key is null
-        return 0
+        return false
     end
     let k = lower(trim(key))
     if has(headers, k)
-        return 1
+        return true
     end
     let ks = keys(headers)
     let i = 0
     while i < len(ks)
         let cur = ks[i]
         if lower(trim(cur)) == k
-            return 1
+            return true
         end
         i += 1
     end
-    return 0
+    return false
 end
 
 ## Returns a new header map with the specified key removed.

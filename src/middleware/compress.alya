@@ -26,19 +26,19 @@ end
 ## Returns 1 if compression was applied, 0 otherwise.
 pub function mw_apply_compression(ctx, config = null)
     if ctx is null or ctx.res is null or ctx.req is null
-        return 0
+        return false
     end
 
     let res = ctx.res
     let req = ctx.req
 
     if res.body is null or len(res.body) == 0
-        return 0
+        return false
     end
 
     # Do not compress if response is already encoded
     if header_has(res.headers, "content-encoding")
-        return 0
+        return false
     end
 
     if config is null
@@ -47,22 +47,22 @@ pub function mw_apply_compression(ctx, config = null)
 
     # Skip if response body length is below compression threshold
     if len(res.body) < config.min_length
-        return 0
+        return false
     end
 
     let accept_enc = header_get(req.headers, "accept-encoding", "")
     if accept_enc == ""
-        return 0
+        return false
     end
 
     let chosen_enc = http_negotiate_encoding(accept_enc)
     if chosen_enc == ""
-        return 0
+        return false
     end
 
     let comp_bytes = http_compress(res.body, chosen_enc)
     if comp_bytes is null or len(comp_bytes) == 0
-        return 0
+        return false
     end
 
     # Set response compression headers
@@ -77,5 +77,5 @@ pub function mw_apply_compression(ctx, config = null)
         ctx_data["compression_encoding"] = chosen_enc
     end
 
-    return 1
+    return true
 end

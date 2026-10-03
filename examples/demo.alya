@@ -28,7 +28,7 @@ http::router_get(r, "/hello", handle_hello)
 http::router_get(r, "/users/:id", handle_user)
 
 let match_res = http::router_match(r, "GET", "/users/42")
-if match_res.found == 1
+if match_res.found == true
     say "Route Match Found! Pattern: " + match_res.route
     say "Param 'id': " + str_from_ptr(match_res.params["id"])
 end

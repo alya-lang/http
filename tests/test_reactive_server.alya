@@ -64,14 +64,14 @@ function main()
         for e in events
             ev::loop_dispatch_event(e)
         end
-        if net::tcp_poll(client_sock, 10) == 1
+        if net::tcp_poll(client_sock, 10) == true
             break
         end
         ticks += 1
     end
 
     let resp_wire = ""
-    if net::tcp_poll(client_sock, 200) == 1
+    if net::tcp_poll(client_sock, 200) == true
         resp_wire = net::tcp_recv(client_sock, 4096)
     end
     net::tcp_close(client_sock)
@@ -103,14 +103,14 @@ function main()
         for e in events
             ev::loop_dispatch_event(e)
         end
-        if net::tcp_poll(client_post, 10) == 1
+        if net::tcp_poll(client_post, 10) == true
             break
         end
         ticks += 1
     end
 
     let resp_post_wire = ""
-    if net::tcp_poll(client_post, 200) == 1
+    if net::tcp_poll(client_post, 200) == true
         resp_post_wire = net::tcp_recv(client_post, 4096)
     end
     net::tcp_close(client_post)
@@ -142,14 +142,14 @@ function main()
         for e in events
             ev::loop_dispatch_event(e)
         end
-        if net::tcp_poll(ws_sock, 10) == 1
+        if net::tcp_poll(ws_sock, 10) == true
             break
         end
         ticks += 1
     end
 
     let hs_response = ""
-    if net::tcp_poll(ws_sock, 200) == 1
+    if net::tcp_poll(ws_sock, 200) == true
         hs_response = net::tcp_recv(ws_sock, 4096)
     end
     runner_assert(r, len(hs_response) > 0, "received WebSocket handshake response")
@@ -170,14 +170,14 @@ function main()
         for e in events
             ev::loop_dispatch_event(e)
         end
-        if net::tcp_poll(ws_sock, 10) == 1
+        if net::tcp_poll(ws_sock, 10) == true
             break
         end
         ticks += 1
     end
 
     let server_ws_wire = ""
-    if net::tcp_poll(ws_sock, 200) == 1
+    if net::tcp_poll(ws_sock, 200) == true
         server_ws_wire = net::tcp_recv(ws_sock, 4096)
     end
     net::tcp_close(ws_sock)

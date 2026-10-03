@@ -269,16 +269,16 @@ pub function proto_find_bytes(data, needle, start_idx: int = 0) -> int
     end
     let i = off
     while i + len(needle) <= len(data)
-        let hit = 1
+        let hit = true
         let j = 0
         while j < len(needle)
             if data[i + j] != needle[j]
-                hit = 0
+                hit = false
                 break
             end
             j += 1
         end
-        if hit == 1
+        if hit == true
             return i
         end
         i += 1
@@ -289,21 +289,21 @@ end
 ## Returns 1 when a byte array holds no zero bytes (string-safe)
 pub function bytes_are_text(data) -> int
     if data is null
-        return 1
+        return true
     end
     let i = 0
     while i < len(data)
         if data[i] == 0
-            return 0
+            return false
         end
         i += 1
     end
-    return 1
+    return true
 end
 
 ## Converts NUL-free bytes into a string, empty string otherwise
 pub function bytes_to_text_or_empty(data) -> string
-    if bytes_are_text(data) == 0
+    if bytes_are_text(data) == false
         return ""
     end
     return crypto::bytes_to_str(data)
