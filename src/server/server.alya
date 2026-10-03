@@ -103,7 +103,7 @@ pub function server_enable_tls(server, cert_pem: string, key_pem: string)
 end
 
 ## Returns 1 when TLS is enabled with identity material configured.
-pub function server_has_tls(server) -> int
+pub function server_has_tls(server) -> bool
     if server is null or server.options is null
         return false
     end

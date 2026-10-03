@@ -79,7 +79,7 @@ pub function header_set(headers, key: string, val)
 end
 
 ## Checks whether a header key exists (case-insensitive).
-pub function header_has(headers, key: string) -> int
+pub function header_has(headers, key: string) -> bool
     if headers is null or key is null
         return false
     end

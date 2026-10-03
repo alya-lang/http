@@ -202,31 +202,31 @@ pub function http_status_text(code: int) -> string
 end
 
 ## Checks if status code is informational (1xx).
-pub function http_is_informational(code: int) -> int
+pub function http_is_informational(code: int) -> bool
     return code >= 100 and code < 200
 end
 
 ## Checks if status code is successful (2xx).
-pub function http_is_success(code: int) -> int
+pub function http_is_success(code: int) -> bool
     return code >= 200 and code < 300
 end
 
 ## Checks if status code is redirection (3xx).
-pub function http_is_redirect(code: int) -> int
+pub function http_is_redirect(code: int) -> bool
     return code >= 300 and code < 400
 end
 
 ## Checks if status code is client error (4xx).
-pub function http_is_client_error(code: int) -> int
+pub function http_is_client_error(code: int) -> bool
     return code >= 400 and code < 500
 end
 
 ## Checks if status code is server error (5xx).
-pub function http_is_server_error(code: int) -> int
+pub function http_is_server_error(code: int) -> bool
     return code >= 500 and code < 600
 end
 
 ## Checks if status code represents an error (4xx, 5xx, or negative).
-pub function http_is_error(code: int) -> int
+pub function http_is_error(code: int) -> bool
     return code >= 400 or code < 0
 end
