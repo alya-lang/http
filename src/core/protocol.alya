@@ -165,7 +165,7 @@ pub function http_parse_response(raw)
             status_text = parts[2]
             let pi = 3
             while pi < len(parts)
-                status_text = status_text + " " + parts[pi]
+                status_text += " " + parts[pi]
                 pi += 1
             end
         else
@@ -235,24 +235,24 @@ pub function http_format_response(res) -> string
     end
 
     # Format general headers
-    wire = wire + headers_format(headers)
+    wire += headers_format(headers)
 
     # Format cookies as Set-Cookie headers
     if res.cookies is not null
         let ci = 0
         while ci < len(res.cookies)
             let c = res.cookies[ci]
-            wire = wire + "Set-Cookie: " + cookie_format(c) + "\r\n"
+            wire += "Set-Cookie: " + cookie_format(c) + "\r\n"
             ci += 1
         end
     end
 
     # Header-Body delimiter
-    wire = wire + "\r\n"
+    wire += "\r\n"
 
     # Append body
     if res.body is not null and len(res.body) > 0
-        wire = wire + res.body
+        wire += res.body
     end
 
     return wire
@@ -372,7 +372,7 @@ pub function http_format_request(req) -> string
 
     let target = req.path
     if req.query is not null and req.query != ""
-        target = target + "?" + req.query
+        target += "?" + req.query
     end
     if target == ""
         target = "/"
@@ -397,11 +397,11 @@ pub function http_format_request(req) -> string
         headers["content-length"] = str(len(req.body))
     end
 
-    wire = wire + headers_format(headers)
-    wire = wire + "\r\n"
+    wire += headers_format(headers)
+    wire += "\r\n"
 
     if req.body is not null and len(req.body) > 0
-        wire = wire + req.body
+        wire += req.body
     end
 
     return wire

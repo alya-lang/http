@@ -56,7 +56,7 @@ function main()
     let medium_data = ""
     let i = 0
     while i < 300
-        medium_data = medium_data + "A"
+        medium_data += "A"
         i += 1
     end
     let medium_wire = ws_encode_text(medium_data, 0)

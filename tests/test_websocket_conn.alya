@@ -10,7 +10,7 @@ struct MockStream
 end
 
 function mock_write(stream, data)
-    stream.written = stream.written + data
+    stream.written += data
     return true
 end
 

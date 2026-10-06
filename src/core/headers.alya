@@ -39,9 +39,9 @@ pub function header_canonical(key: string) -> string
     let i = 0
     while i < len(parts)
         if i > 0
-            res = res + "-"
+            res += "-"
         end
-        res = res + _cap_word(parts[i])
+        res += _cap_word(parts[i])
         i += 1
     end
     return res
@@ -130,7 +130,7 @@ pub function headers_format(headers)
         let k = ks[i]
         let val = headers[k]
         if val is not null
-            out = out + header_canonical(k) + ": " + str(val) + "\r\n"
+            out += header_canonical(k) + ": " + str(val) + "\r\n"
         end
         i += 1
     end

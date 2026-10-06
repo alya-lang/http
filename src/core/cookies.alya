@@ -20,31 +20,31 @@ pub function cookie_format(c: HttpCookie) -> string
     let res = c.name + "=" + c.value
 
     if c.path is not null and c.path != ""
-        res = res + "; Path=" + c.path
+        res += "; Path=" + c.path
     end
 
     if c.domain is not null and c.domain != ""
-        res = res + "; Domain=" + c.domain
+        res += "; Domain=" + c.domain
     end
 
     if c.max_age is not null and c.max_age >= 0
-        res = res + "; Max-Age=" + str(c.max_age)
+        res += "; Max-Age=" + str(c.max_age)
     end
 
     if c.expires is not null and c.expires != ""
-        res = res + "; Expires=" + c.expires
+        res += "; Expires=" + c.expires
     end
 
     if c.http_only == true
-        res = res + "; HttpOnly"
+        res += "; HttpOnly"
     end
 
     if c.secure == true
-        res = res + "; Secure"
+        res += "; Secure"
     end
 
     if c.same_site is not null and c.same_site != ""
-        res = res + "; SameSite=" + c.same_site
+        res += "; SameSite=" + c.same_site
     end
 
     return res

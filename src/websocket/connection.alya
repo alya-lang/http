@@ -166,7 +166,7 @@ pub function ws_feed(ws: WebSocketConnection, chunk)
         return false
     end
 
-    ws.buffer = ws.buffer + chunk
+    ws.buffer += chunk
     let frames_processed = 0
 
     while len(ws.buffer) > 0

@@ -55,14 +55,14 @@ pub function ws_handshake_response(req, subprotocol: string = "")
     let accept_key = ws_accept_key(sec_key)
 
     let wire = "HTTP/1.1 101 Switching Protocols\r\n"
-    wire = wire + "Upgrade: websocket\r\n"
-    wire = wire + "Connection: Upgrade\r\n"
-    wire = wire + "Sec-WebSocket-Accept: " + accept_key + "\r\n"
+    wire += "Upgrade: websocket\r\n"
+    wire += "Connection: Upgrade\r\n"
+    wire += "Sec-WebSocket-Accept: " + accept_key + "\r\n"
 
     if subprotocol != "" and len(subprotocol) > 0
-        wire = wire + "Sec-WebSocket-Protocol: " + subprotocol + "\r\n"
+        wire += "Sec-WebSocket-Protocol: " + subprotocol + "\r\n"
     end
 
-    wire = wire + "\r\n"
+    wire += "\r\n"
     return wire
 end

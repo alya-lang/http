@@ -128,18 +128,18 @@ pub function client_execute(client, method, url_str: string, extra_headers = nul
         q = parsed.url_query
     end
     if q != ""
-        path = path + "?" + q
+        path += "?" + q
     end
 
     let req_line = method + " " + path + " HTTP/1.1\r\n"
     let wire = req_line + "Host: " + host + "\r\nUser-Agent: Alya-Http/0.1.0\r\nConnection: close\r\n"
     if len(body) > 0
-        wire = wire + "Content-Length: " + str(len(body)) + "\r\n"
+        wire += "Content-Length: " + str(len(body)) + "\r\n"
     end
-    wire = wire + headers_format(req_headers)
-    wire = wire + "\r\n"
+    wire += headers_format(req_headers)
+    wire += "\r\n"
     if len(body) > 0
-        wire = wire + body
+        wire += body
     end
 
     net::tcp_send(sock, wire)
@@ -153,7 +153,7 @@ pub function client_execute(client, method, url_str: string, extra_headers = nul
         if chunk == "" or len(chunk) == 0
             break
         end
-        raw_resp = raw_resp + chunk
+        raw_resp += chunk
 
         if header_end_idx < 0
             let sep = _proto_find(raw_resp, "\r\n\r\n", 0)

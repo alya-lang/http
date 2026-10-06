@@ -223,7 +223,7 @@ pub function ws_frame_encode(opcode: int, payload: string = "", is_final: int = 
 
     let wire = ""
     for b in header_bytes
-        wire = wire + chr(b)
+        wire += chr(b)
     end
 
     if mask == true
@@ -232,12 +232,12 @@ pub function ws_frame_encode(opcode: int, payload: string = "", is_final: int = 
         while k < plen
             let m = effective_mask_key[k % 4]
             let c = bit_xor(ord(char_at(payload, k)), m)
-            masked_payload = masked_payload + chr(c)
+            masked_payload += chr(c)
             k += 1
         end
-        wire = wire + masked_payload
+        wire += masked_payload
     else
-        wire = wire + payload
+        wire += payload
     end
 
     return wire
@@ -259,7 +259,7 @@ pub function ws_encode_close(code: int = 1000, reason: string = "", mask: int = 
     if code > 0
         payload = chr(bit_and(bit_shr(code, 8), 255)) + chr(bit_and(code, 255))
         if reason != ""
-            payload = payload + reason
+            payload += reason
         end
     end
     return ws_frame_encode(WebSocketOpCode.Close, payload, 1, mask, mask_key)
@@ -354,7 +354,7 @@ pub function ws_frame_parse(raw_data, offset: int = 0)
         let i = 0
         while i < plen
             let c = bit_xor(ord(char_at(payload_raw, i)), mask_key[i % 4])
-            payload = payload + chr(c)
+            payload += chr(c)
             i += 1
         end
     else

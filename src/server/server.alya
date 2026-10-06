@@ -214,7 +214,7 @@ pub function server_accept(server, timeout_ms: int = 1000)
         if chunk == "" or len(chunk) == 0
             break
         end
-        raw_req = raw_req + chunk
+        raw_req += chunk
         # If headers end delimiter is found, stop reading for simple requests
         let delim_idx = _proto_find(raw_req, "\r\n\r\n", 0)
         if delim_idx >= 0

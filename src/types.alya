@@ -261,7 +261,7 @@ pub function request_create(method, path: string, query: string = "", headers = 
     end
     let full_url = path
     if query != ""
-        full_url = full_url + "?" + query
+        full_url += "?" + query
     end
     return HttpRequest {
         method: method,

@@ -80,7 +80,7 @@ pub function _on_reactive_client_data(client_stream: TcpStream, chunk: string)
     end
 
     # 2. Accumulate incoming bytes for HTTP request framing
-    state.buffer = state.buffer + chunk
+    state.buffer += chunk
 
     while 1
         # 3. Header parsing phase

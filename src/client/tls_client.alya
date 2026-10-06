@@ -21,14 +21,14 @@ pub function https_build_request(method, host: string, path: string, req_headers
         target = "/"
     end
     let wire = method + " " + target + " HTTP/1.1\r\n"
-    wire = wire + "Host: " + host + "\r\nUser-Agent: Alya-Http/0.1.0\r\nConnection: close\r\n"
+    wire += "Host: " + host + "\r\nUser-Agent: Alya-Http/0.1.0\r\nConnection: close\r\n"
     if body is not null and len(body) > 0
-        wire = wire + "Content-Length: " + str(len(body)) + "\r\n"
+        wire += "Content-Length: " + str(len(body)) + "\r\n"
     end
-    wire = wire + headers_format(req_headers)
-    wire = wire + "\r\n"
+    wire += headers_format(req_headers)
+    wire += "\r\n"
     if body is not null and len(body) > 0
-        wire = wire + body
+        wire += body
     end
     return wire
 end
@@ -94,7 +94,7 @@ pub function https_execute(client, method, url_str: string, extra_headers = null
         q = parsed.url_query
     end
     if q != ""
-        path = path + "?" + q
+        path += "?" + q
     end
 
     let cfg = tls::config(host, port)
