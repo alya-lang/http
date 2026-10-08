@@ -60,13 +60,13 @@ function main()
     http::server_use_event_loop(srv, l)
     runner_assert_eq(r, srv.running, 1, "server started on event loop")
 
-    # SECTION 1: Reactive SSE subscribe, two events + comment, then close
+    # SECTION 1: Reactive SSE subscribe, two events + comment, then client close
     say "--- SECTION 1 (Reactive SSE Stream) ---"
 
-    http::reactive_sse(l, "http://" + host + ":" + str(port) + "/events", null, on_sse_event, on_sse_err, on_sse_close)
+    let cli = http::reactive_sse(l, "http://" + host + ":" + str(port) + "/events", null, on_sse_event, on_sse_err, on_sse_close)
 
     let ticks = 0
-    while ticks < 100 and (len(g_sse_state.items) < 2 or g_sse_state.close_done == 0)
+    while ticks < 100 and len(g_sse_state.items) < 2
         let events = ev::loop_tick(l, 50)
         for e in events
             ev::loop_dispatch_event(e)
@@ -78,8 +78,18 @@ function main()
     runner_assert_str_eq(r, g_sse_state.items[0], "sse-hello-1|greet|1", "first event data/type/id match")
     runner_assert_str_eq(r, g_sse_state.items[1], "sse-hello-2|greet|2", "second event data/type/id match")
     runner_assert_eq(r, g_sse_state.comments, 1, "keep-alive comment dispatched")
-    runner_assert_eq(r, g_sse_state.close_done, 1, "SSE stream closed after response")
     runner_assert_str_eq(r, g_sse_state.error_msg, "", "no client error on happy path")
+
+    http::reactive_sse_close(cli)
+    ticks = 0
+    while ticks < 100 and g_sse_state.close_done == 0
+        let events = ev::loop_tick(l, 50)
+        for e in events
+            ev::loop_dispatch_event(e)
+        end
+        ticks += 1
+    end
+    runner_assert_eq(r, g_sse_state.close_done, 1, "SSE stream closed on client close")
 
     # SECTION 2: Non-200 SSE endpoint reports an error
     say "--- SECTION 2 (SSE Error Path) ---"

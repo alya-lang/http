@@ -65,7 +65,7 @@ http/
 ├── examples/
 │   ├── compression_demo.alya # Dedicated HTTP compression showcase
 │   └── demo.alya           # Comprehensive usage demo
-├── tests/                  # 21 test suites (20 active, 1 parked — see .alyatest)
+├── tests/                  # 21 test suites (100% passing)
 │   ├── test_client.alya
 │   ├── test_compression.alya
 │   ├── test_context.alya
@@ -77,7 +77,7 @@ http/
 │   ├── test_protocol.alya
 │   ├── test_reactive_client.alya
 │   ├── test_reactive_server.alya
-│   ├── test_reactive_sse.alya  # parked: blocked by alya-lang/alya#131
+│   ├── test_reactive_sse.alya
 │   ├── test_router.alya
 │   ├── test_server.alya
 │   ├── test_server_tls.alya
@@ -316,12 +316,6 @@ main()
 | `chunk_decode(raw)` | `raw: string` | Decodes a chunked payload back to raw content |
 | `reactive_sse(loop, url, headers, on_event, on_error, on_close)` | `loop: EventLoop, ...` | Subscribes to an SSE endpoint over the event loop |
 | `reactive_sse_close(client)` | `client: ReactiveSseClient` | Closes an active reactive SSE subscription |
-
-> [!NOTE]
-> **Compiler-blocked e2e:** the reactive SSE client code is complete and safe (dead code until
-> called — all other suites stay green), but any binary mixing `SseEvent` construction with the
-> event loop cannot pass on alya 0.0.20 (see alya-lang/alya#131). `tests/test_reactive_sse.alya`
-> is parked in `.alyatest` exclude until the fix lands; enable it then.
 
 ---
 
