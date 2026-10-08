@@ -1,0 +1,493 @@
+## Reactive Event-Driven HTTP and WebSocket Client.
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "event" as ev
+import "url" as url_pkg
+import "crypto" as crypto
+import "../types.alya"
+import "../core/status.alya"
+import "../core/protocol.alya"
+import "../core/headers.alya"
+import "../websocket/handshake.alya"
+import "../websocket/connection.alya"
+import "../websocket/frame.alya"
+import "../server/reactive.alya"
+
+## Represents the state of an in-flight reactive HTTP client request.
+pub struct ReactiveClientRequest
+    stream
+    req
+    buffer: string
+    headers_parsed: int
+    res
+    content_length: int
+    on_response_cb
+    on_error_cb
+    completed: int
+end
+
+## Represents the state of a reactive WebSocket client connection.
+pub struct ReactiveWsClientState
+    stream
+    sec_key: string
+    buffer: string
+    handshake_complete: int
+    ws_conn
+    on_open_cb
+    on_message_cb
+    on_error_cb
+    on_close_cb
+end
+
+## Generates a pseudo-random 16-byte base64-encoded Sec-WebSocket-Key nonce.
+pub function _ws_client_generate_key() -> string
+    let bytes = []
+    let seed = clock_ms()
+    let i = 0
+    while i < 16
+        seed = (seed * 1103515245 + 12345) % 2147483647
+        if seed < 0
+            seed = -seed
+        end
+        bytes.push(seed % 256)
+        i += 1
+    end
+    return base64_encode_bytes(bytes)
+end
+
+## Callback invoked when data arrives on a reactive HTTP client stream.
+pub function _on_reactive_client_resp_data(stream, chunk: string)
+    if stream is null or chunk is null or len(chunk) == 0
+        return false
+    end
+    let state: ReactiveClientRequest = stream.data
+    if state is null or state.completed == true
+        return false
+    end
+
+    state.buffer += chunk
+
+    # 1. Header parsing phase
+    if state.headers_parsed == false
+        let delim_idx = _proto_find(state.buffer, "\r\n\r\n", 0)
+        let delim_len = 4
+        if delim_idx < 0
+            delim_idx = _proto_find(state.buffer, "\n\n", 0)
+            delim_len = 2
+        end
+
+        if delim_idx >= 0
+            let header_str = substring(state.buffer, 0, delim_idx)
+            let remainder = ""
+            let rem_start = delim_idx + delim_len
+            if rem_start < len(state.buffer)
+                remainder = substring(state.buffer, rem_start, len(state.buffer) - rem_start)
+            end
+            state.buffer = remainder
+            state.headers_parsed = true
+
+            let res: HttpResponse = http_parse_response(header_str + "\r\n\r\n")
+            state.res = res
+
+            let cl_val = header_get(res.headers, "content-length", "-1")
+            state.content_length = to_int(cl_val)
+
+            # Check for no-body status codes
+            let req_method = ""
+            if state.req is not null
+                req_method = upper(str(state.req.method))
+            end
+            if state.content_length == 0 or res.status_code == 204 or res.status_code == 304 or req_method == "HEAD"
+                state.completed = true
+                res.body = ""
+                res.body_bytes = []
+                if state.on_response_cb is not null
+                    let cb = state.on_response_cb
+                    cb(res)
+                end
+                ev::tcp_stream_close(stream)
+                return true
+            end
+        else
+            return true
+        end
+    end
+
+    # 2. Body accumulation phase
+    if state.headers_parsed == true and state.content_length >= 0
+        let req_cl = state.content_length
+        if len(state.buffer) >= req_cl
+            let body_data = ""
+            if req_cl > 0
+                body_data = substring(state.buffer, 0, req_cl)
+            end
+            let res: HttpResponse = state.res
+            res.body = body_data
+            res.body_bytes = crypto::str_to_bytes(body_data)
+
+            state.completed = true
+            if state.on_response_cb is not null
+                let cb = state.on_response_cb
+                cb(res)
+            end
+            ev::tcp_stream_close(stream)
+            return true
+        end
+    end
+
+    return true
+end
+
+## Callback invoked when a reactive HTTP client stream closes.
+pub function _on_reactive_client_resp_close(stream)
+    if stream is null
+        return false
+    end
+    let state: ReactiveClientRequest = stream.data
+    if state is null or state.completed == true
+        return false
+    end
+
+    state.completed = true
+
+    if state.headers_parsed == true
+        let res: HttpResponse = state.res
+        res.body = state.buffer
+        res.body_bytes = crypto::str_to_bytes(state.buffer)
+        if state.on_response_cb is not null
+            let cb = state.on_response_cb
+            cb(res)
+        end
+    else
+        if state.on_error_cb is not null
+            let err_cb = state.on_error_cb
+            err_cb("Connection closed prematurely before HTTP response headers were received")
+        end
+    end
+    return true
+end
+
+## Dispatches a reactive non-blocking HTTP request on the EventLoop.
+pub function client_reactive_fetch(loop, method, url_str: string, headers = null, body: string = "", on_response = null, on_error = null)
+    if loop is null or url_str is null or url_str == ""
+        if on_error is not null
+            on_error("Invalid loop or URL provided to client_reactive_fetch")
+        end
+        return null
+    end
+
+    let parsed = url_pkg::url_parse(url_str)
+    let host = parsed.host
+    let scheme = parsed.scheme
+    if host == "" or (scheme != "http" and scheme != "https")
+        if on_error is not null
+            on_error("Invalid URL host or scheme: " + url_str)
+        end
+        return null
+    end
+
+    if scheme == "https"
+        if on_error is not null
+            on_error("Reactive client currently supports HTTP (use blocking client for HTTPS)")
+        end
+        return null
+    end
+
+    let port_str = url_pkg::url_effective_port(parsed)
+    let port = 80
+    if len(port_str) > 0
+        port = to_int(port_str)
+    end
+
+    let path = parsed.path
+    if path == ""
+        path = "/"
+    end
+    let query = parsed.query
+    let full_path = path
+    if query != ""
+        full_path += "?" + query
+    end
+
+    let req_headers = {}
+    if headers is not null
+        let ks = keys(headers)
+        let ki = 0
+        while ki < len(ks)
+            let k = ks[ki]
+            req_headers[lower(trim(k))] = headers[k]
+            ki += 1
+        end
+    end
+
+    if !has(req_headers, "host")
+        if port != 80 and port != 443
+            req_headers["host"] = host + ":" + str(port)
+        else
+            req_headers["host"] = host
+        end
+    end
+
+    if !has(req_headers, "user-agent")
+        req_headers["user-agent"] = "Alya-Http/0.1.0"
+    end
+
+    if !has(req_headers, "connection")
+        req_headers["connection"] = "close"
+    end
+
+    if body != "" and !has(req_headers, "content-length")
+        req_headers["content-length"] = str(len(body))
+    end
+
+    let req: HttpRequest = request_create(method, full_path, query, req_headers, body)
+    let wire = http_format_request(req)
+
+    let stream = ev::tcp_client_connect(loop, host, port, null, null)
+    if stream is null
+        if on_error is not null
+            on_error("Failed to connect to " + host + ":" + str(port))
+        end
+        return null
+    end
+
+    let req_state = ReactiveClientRequest {
+        stream: stream,
+        req: req,
+        buffer: "",
+        headers_parsed: 0,
+        res: null,
+        content_length: -1,
+        on_response_cb: on_response,
+        on_error_cb: on_error,
+        completed: 0
+    }
+
+    stream.data = req_state
+    stream.on_data_cb = _on_reactive_client_resp_data
+    stream.on_close_cb = _on_reactive_client_resp_close
+
+    ev::tcp_stream_write(stream, wire)
+    return req_state
+end
+
+## Performs a reactive GET request.
+pub function client_reactive_get(loop, url_str: string, headers = null, on_response = null, on_error = null)
+    return client_reactive_fetch(loop, "GET", url_str, headers, "", on_response, on_error)
+end
+
+## Performs a reactive POST request.
+pub function client_reactive_post(loop, url_str: string, body: string = "", content_type: string = "application/json", headers = null, on_response = null, on_error = null)
+    if headers is null
+        headers = {}
+    end
+    if content_type is not null and content_type != ""
+        header_set(headers, "Content-Type", content_type)
+    end
+    return client_reactive_fetch(loop, "POST", url_str, headers, body, on_response, on_error)
+end
+
+## Performs a reactive PUT request.
+pub function client_reactive_put(loop, url_str: string, body: string = "", content_type: string = "application/json", headers = null, on_response = null, on_error = null)
+    if headers is null
+        headers = {}
+    end
+    if content_type is not null and content_type != ""
+        header_set(headers, "Content-Type", content_type)
+    end
+    return client_reactive_fetch(loop, "PUT", url_str, headers, body, on_response, on_error)
+end
+
+## Performs a reactive DELETE request.
+pub function client_reactive_delete(loop, url_str: string, headers = null, on_response = null, on_error = null)
+    return client_reactive_fetch(loop, "DELETE", url_str, headers, "", on_response, on_error)
+end
+
+## Callback invoked when data arrives on a reactive WebSocket client stream.
+pub function _on_reactive_ws_client_data(stream, chunk: string)
+    if stream is null or chunk is null or len(chunk) == 0
+        return false
+    end
+    let state: ReactiveWsClientState = stream.data
+    if state is null
+        return false
+    end
+
+    if state.handshake_complete == 1
+        if state.ws_conn is not null
+            let ws: WebSocketConnection = state.ws_conn
+            ws_feed(ws, chunk)
+        end
+        return true
+    end
+
+    state.buffer += chunk
+    let delim_idx = _proto_find(state.buffer, "\r\n\r\n", 0)
+    let delim_len = 4
+    if delim_idx < 0
+        delim_idx = _proto_find(state.buffer, "\n\n", 0)
+        delim_len = 2
+    end
+
+    if delim_idx >= 0
+        let header_str = substring(state.buffer, 0, delim_idx)
+        let remainder = ""
+        let rem_start = delim_idx + delim_len
+        if rem_start < len(state.buffer)
+            remainder = substring(state.buffer, rem_start, len(state.buffer) - rem_start)
+        end
+        state.buffer = ""
+
+        let res: HttpResponse = http_parse_response(header_str + "\r\n\r\n")
+        if res.status_code != 101
+            if state.on_error_cb is not null
+                let err_cb = state.on_error_cb
+                err_cb("WebSocket handshake rejected with status " + str(res.status_code))
+            end
+            ev::tcp_stream_close(stream)
+            return false
+        end
+
+        let expected_accept = ws_accept_key(state.sec_key)
+        let actual_accept = header_get(res.headers, "sec-websocket-accept", "")
+        if actual_accept != expected_accept
+            if state.on_error_cb is not null
+                let err_cb = state.on_error_cb
+                err_cb("Sec-WebSocket-Accept token mismatch: expected " + expected_accept + ", got " + actual_accept)
+            end
+            ev::tcp_stream_close(stream)
+            return false
+        end
+
+        # Handshake valid! Create client WebSocketConnection with is_server = 0
+        let ws: WebSocketConnection = ws_connection_from_stream(stream, 0)
+        state.ws_conn = ws
+        state.handshake_complete = 1
+
+        if state.on_message_cb is not null
+            ws_on_message(ws, state.on_message_cb)
+        end
+        if state.on_close_cb is not null
+            ws_on_close(ws, state.on_close_cb)
+        end
+
+        if state.on_open_cb is not null
+            let open_cb = state.on_open_cb
+            open_cb(ws)
+        end
+
+        if len(remainder) > 0
+            ws_feed(ws, remainder)
+        end
+    end
+
+    return true
+end
+
+## Callback invoked when a reactive WebSocket client stream closes.
+pub function _on_reactive_ws_client_close(stream)
+    if stream is null
+        return false
+    end
+    let state: ReactiveWsClientState = stream.data
+    if state is null
+        return false
+    end
+
+    if state.handshake_complete == 0
+        if state.on_error_cb is not null
+            let err_cb = state.on_error_cb
+            err_cb("Connection closed before WebSocket handshake completed")
+        end
+        return false
+    end
+
+    if state.ws_conn is not null
+        let ws: WebSocketConnection = state.ws_conn
+        if ws.state != WebSocketState.Closed
+            ws.state = WebSocketState.Closed
+            let cb = ws.on_close_cb
+            if cb is not null
+                cb(ws, 1006, "Connection closed abruptly")
+            end
+        end
+    end
+    return true
+end
+
+## Connects asynchronously to a WebSocket endpoint.
+pub function client_reactive_ws_connect(loop, url_str: string, on_open = null, on_message = null, on_error = null, on_close = null)
+    if loop is null or url_str is null or url_str == ""
+        if on_error is not null
+            on_error("Invalid loop or URL provided to client_reactive_ws_connect")
+        end
+        return null
+    end
+
+    let parsed = url_pkg::url_parse(url_str)
+    let host = parsed.host
+    let scheme = parsed.scheme
+    if host == "" or (scheme != "ws" and scheme != "http")
+        if on_error is not null
+            on_error("Invalid WebSocket URL (scheme must be ws:// or http://): " + url_str)
+        end
+        return null
+    end
+
+    let port_str = url_pkg::url_effective_port(parsed)
+    let port = 80
+    if len(port_str) > 0
+        port = to_int(port_str)
+    end
+
+    let path = parsed.path
+    if path == ""
+        path = "/"
+    end
+    let query = parsed.query
+    let full_path = path
+    if query != ""
+        full_path += "?" + query
+    end
+
+    let sec_key = _ws_client_generate_key()
+
+    let req_wire = "GET " + full_path + " HTTP/1.1\r\n"
+    req_wire += "Host: " + host
+    if port != 80 and port != 443
+        req_wire += ":" + str(port)
+    end
+    req_wire += "\r\n"
+    req_wire += "Upgrade: websocket\r\n"
+    req_wire += "Connection: Upgrade\r\n"
+    req_wire += "Sec-WebSocket-Key: " + sec_key + "\r\n"
+    req_wire += "Sec-WebSocket-Version: 13\r\n"
+    req_wire += "User-Agent: Alya-Http-Ws/0.1.0\r\n\r\n"
+
+    let stream = ev::tcp_client_connect(loop, host, port, null, null)
+    if stream is null
+        if on_error is not null
+            on_error("Failed to connect to " + host + ":" + str(port))
+        end
+        return null
+    end
+
+    let ws_state = ReactiveWsClientState {
+        stream: stream,
+        sec_key: sec_key,
+        buffer: "",
+        handshake_complete: 0,
+        ws_conn: null,
+        on_open_cb: on_open,
+        on_message_cb: on_message,
+        on_error_cb: on_error,
+        on_close_cb: on_close
+    }
+
+    stream.data = ws_state
+    stream.on_data_cb = _on_reactive_ws_client_data
+    stream.on_close_cb = _on_reactive_ws_client_close
+
+    ev::tcp_stream_write(stream, req_wire)
+    return ws_state
+end

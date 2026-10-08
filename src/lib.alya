@@ -28,6 +28,8 @@ import "./websocket/frame.alya"
 import "./websocket/connection.alya"
 @cfg(feature = "event")
 import "./server/reactive.alya"
+@cfg(feature = "event")
+import "./client/reactive.alya"
 
 # ═══════════════════════════════════════════════════════════════
 # High-Level Idiomatic HTTP API
@@ -110,6 +112,14 @@ end
 @cfg(feature = "compress")
 pub function decompress(bytes_list, encoding: string = "gzip")
     return http_decompress(bytes_list, encoding)
+end
+
+## Negotiates the best compression encoding from an Accept-Encoding header string.
+##
+## Requires the `compress` feature (default-on).
+@cfg(feature = "compress")
+pub function negotiate_encoding(accept_encoding: string) -> string
+    return http_negotiate_encoding(accept_encoding)
 end
 
 ## Returns the standard HTTP status reason phrase for a given code.
@@ -232,4 +242,60 @@ end
 ## Creates a low-level WebSocket connection.
 pub function ws_conn(stream, is_server: int = 1, write_fn = null, close_fn = null)
     return ws_connection_new(stream, is_server, write_fn, close_fn)
+end
+
+## Initiates a non-blocking reactive HTTP request on the EventLoop.
+##
+## Requires the `event` feature (default-on).
+@cfg(feature = "event")
+pub function reactive_fetch(loop, method, url_str: string, headers = null, body: string = "", on_response = null, on_error = null)
+    return client_reactive_fetch(loop, method, url_str, headers, body, on_response, on_error)
+end
+
+## Performs a non-blocking reactive HTTP GET request.
+##
+## Requires the `event` feature (default-on).
+@cfg(feature = "event")
+pub function reactive_get(loop, url_str: string, headers = null, on_response = null, on_error = null)
+    return client_reactive_get(loop, url_str, headers, on_response, on_error)
+end
+
+## Performs a non-blocking reactive HTTP POST request.
+##
+## Requires the `event` feature (default-on).
+@cfg(feature = "event")
+pub function reactive_post(loop, url_str: string, body: string = "", content_type: string = "application/json", headers = null, on_response = null, on_error = null)
+    return client_reactive_post(loop, url_str, body, content_type, headers, on_response, on_error)
+end
+
+## Performs a non-blocking reactive HTTP PUT request.
+##
+## Requires the `event` feature (default-on).
+@cfg(feature = "event")
+pub function reactive_put(loop, url_str: string, body: string = "", content_type: string = "application/json", headers = null, on_response = null, on_error = null)
+    return client_reactive_put(loop, url_str, body, content_type, headers, on_response, on_error)
+end
+
+## Performs a non-blocking reactive HTTP DELETE request.
+##
+## Requires the `event` feature (default-on).
+@cfg(feature = "event")
+pub function reactive_delete(loop, url_str: string, headers = null, on_response = null, on_error = null)
+    return client_reactive_delete(loop, url_str, headers, on_response, on_error)
+end
+
+## Connects asynchronously to a WebSocket endpoint over the EventLoop.
+##
+## Requires the `event` feature (default-on).
+@cfg(feature = "event")
+pub function reactive_ws_connect(loop, url_str: string, on_open = null, on_message = null, on_error = null, on_close = null)
+    return client_reactive_ws_connect(loop, url_str, on_open, on_message, on_error, on_close)
+end
+
+## Alias for reactive_ws_connect.
+##
+## Requires the `event` feature (default-on).
+@cfg(feature = "event")
+pub function reactive_ws(loop, url_str: string, on_open = null, on_message = null, on_error = null, on_close = null)
+    return client_reactive_ws_connect(loop, url_str, on_open, on_message, on_error, on_close)
 end

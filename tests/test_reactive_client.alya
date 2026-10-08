@@ -1,0 +1,189 @@
+## Test Reactive HTTP Client & WebSocket Client Integration over EventLoop
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "std/test"
+import "event" as ev
+import "../src/types.alya"
+import "../src/lib.alya" as http
+
+struct ClientTestState
+    get_done: int
+    get_status: int
+    get_body: string
+    post_done: int
+    post_status: int
+    post_body: string
+    ws_open_done: int
+    ws_msg_done: int
+    ws_received_msg: string
+    ws_close_done: int
+    error_msg: string
+end
+
+let g_test_state = ClientTestState {
+    get_done: 0,
+    get_status: 0,
+    get_body: "",
+    post_done: 0,
+    post_status: 0,
+    post_body: "",
+    ws_open_done: 0,
+    ws_msg_done: 0,
+    ws_received_msg: "",
+    ws_close_done: 0,
+    error_msg: ""
+}
+
+function handle_srv_hello(ctx)
+    return http::ctx_json(ctx, "{\"greeting\":\"hello reactive client\"}", 200)
+end
+
+function handle_srv_echo(ctx)
+    let body = http::ctx_body(ctx)
+    return http::ctx_text(ctx, "CLIENT_ECHO:" + body, 200)
+end
+
+function handle_srv_ws_msg(conn, msg, _is_bin)
+    http::ws_send(conn, "WS_SERVER:" + msg)
+end
+
+function handle_srv_ws_session(ws, _req)
+    http::ws_on_message(ws, handle_srv_ws_msg)
+end
+
+function on_get_res(res: HttpResponse)
+    g_test_state.get_done = 1
+    g_test_state.get_status = res.status_code
+    g_test_state.get_body = res.body
+end
+
+function on_get_err(err)
+    g_test_state.error_msg = err
+end
+
+function on_post_res(res: HttpResponse)
+    g_test_state.post_done = 1
+    g_test_state.post_status = res.status_code
+    g_test_state.post_body = res.body
+end
+
+function on_ws_open(ws: WebSocketConnection)
+    g_test_state.ws_open_done = 1
+    http::ws_send(ws, "PingFromClient")
+end
+
+function on_ws_msg(ws: WebSocketConnection, msg, _is_bin)
+    g_test_state.ws_msg_done = 1
+    g_test_state.ws_received_msg = msg
+    http::ws_close(ws, 1000, "Session Finished")
+end
+
+function on_ws_close(_ws, _code, _reason)
+    g_test_state.ws_close_done = 1
+end
+
+@cfg(feature = "event")
+function main()
+    test_suite("Reactive HTTP & WebSocket Client Tests")
+    let r = runner_new()
+
+    let l = ev::loop()
+    let port = 19885
+    let host = "127.0.0.1"
+
+    # Setup Reactive HTTP Server
+    let rt = http::router()
+    http::router_get(rt, "/api/hello", handle_srv_hello)
+    http::router_post(rt, "/api/echo", handle_srv_echo)
+    http::router_get(rt, "/ws/chat", handle_srv_ws_session)
+
+    let srv = http::server(port, host, rt)
+    http::server_use_event_loop(srv, l)
+    runner_assert_eq(r, srv.running, 1, "server started on event loop")
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECTION 1: Reactive HTTP GET
+    # ═══════════════════════════════════════════════════════════════
+    say "--- SECTION 1 (Reactive HTTP GET) ---"
+
+    http::reactive_get(l, "http://" + host + ":" + str(port) + "/api/hello", null, on_get_res, on_get_err)
+
+    let ticks = 0
+    while ticks < 100 and g_test_state.get_done == 0
+        let events = ev::loop_tick(l, 50)
+        for e in events
+            ev::loop_dispatch_event(e)
+        end
+        ticks += 1
+    end
+
+    runner_assert_eq(r, g_test_state.get_done, 1, "reactive GET response received")
+    runner_assert_eq(r, g_test_state.get_status, 200, "reactive GET status 200 OK")
+    runner_assert_eq(r, index_of(g_test_state.get_body, "hello reactive client") >= 0, 1, "reactive GET body contains greeting")
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECTION 2: Reactive HTTP POST
+    # ═══════════════════════════════════════════════════════════════
+    say "--- SECTION 2 (Reactive HTTP POST) ---"
+
+    let post_payload = "Greetings from async client!"
+    http::reactive_post(l, "http://" + host + ":" + str(port) + "/api/echo", post_payload, "text/plain", null, on_post_res, on_get_err)
+
+    ticks = 0
+    while ticks < 100 and g_test_state.post_done == 0
+        let events = ev::loop_tick(l, 50)
+        for e in events
+            ev::loop_dispatch_event(e)
+        end
+        ticks += 1
+    end
+
+    runner_assert_eq(r, g_test_state.post_done, 1, "reactive POST response received")
+    runner_assert_eq(r, g_test_state.post_status, 200, "reactive POST status 200 OK")
+    runner_assert_str_eq(r, g_test_state.post_body, "CLIENT_ECHO:" + post_payload, "reactive POST echoed body matches")
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECTION 3: Reactive WebSocket Client Handshake & Messaging
+    # ═══════════════════════════════════════════════════════════════
+    say "--- SECTION 3 (Reactive WebSocket Client) ---"
+
+    http::reactive_ws_connect(l, "ws://" + host + ":" + str(port) + "/ws/chat", on_ws_open, on_ws_msg, on_get_err, on_ws_close)
+
+    ticks = 0
+    while ticks < 100 and (g_test_state.ws_open_done == 0 or g_test_state.ws_msg_done == 0 or g_test_state.ws_close_done == 0)
+        let events = ev::loop_tick(l, 50)
+        for e in events
+            ev::loop_dispatch_event(e)
+        end
+        ticks += 1
+    end
+
+    runner_assert_eq(r, g_test_state.ws_open_done, 1, "client websocket connected and opened")
+    runner_assert_eq(r, g_test_state.ws_msg_done, 1, "client websocket message received")
+    runner_assert_str_eq(r, g_test_state.ws_received_msg, "WS_SERVER:PingFromClient", "server echo message matches vector")
+    runner_assert_eq(r, g_test_state.ws_close_done, 1, "client websocket closed cleanly")
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECTION 4: Shutdown
+    # ═══════════════════════════════════════════════════════════════
+    say "--- SECTION 4 (Shutdown) ---"
+    http::server_close_reactive(srv)
+    runner_assert_eq(r, srv.running, 0, "reactive server stopped")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+@cfg(not(feature = "event"))
+function main()
+    test_suite("Reactive HTTP & WebSocket Client Tests (skipped without event feature)")
+    let r = runner_new()
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()
