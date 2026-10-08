@@ -238,7 +238,7 @@ end
 
 ## Encodes a WebSocket frame into raw RFC 6455 wire bytes.
 pub function ws_encode_frame(opcode: int, payload, is_client: int = 0)
-    return ws_frame_encode(opcode, payload, is_client)
+    return ws_frame_encode(opcode, payload, 1, is_client)
 end
 
 ## Creates a low-level WebSocket connection.

@@ -2,6 +2,7 @@
 ## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 import "std/test"
 import "../src/websocket/frame.alya"
+import "../src/lib.alya" as http
 
 function main()
     test_suite("WebSocket Frame Tests")
@@ -83,6 +84,21 @@ function main()
     let c2 = parse_step2[1]
     runner_assert_eq(r, f_step2.is_ping(), 1, "second frame is ping")
     runner_assert_eq(r, c2, len(ping_wire), "second frame consumed len(ping_wire)")
+
+    # 8. Facade ws_encode_frame maps is_client to mask (alya-lang/http#5)
+    let fac0 = http::ws_encode_frame(1, "Hi", 0)
+    let f_fac0 = ws_frame_parse(fac0, 0)[0]
+    runner_assert_eq(r, len(fac0), 4, "server frame is 4 bytes (unmasked)")
+    runner_assert_eq(r, f_fac0.fin, 1, "server frame is final")
+    runner_assert_eq(r, f_fac0.masked, 0, "server frame is unmasked")
+    runner_assert_str_eq(r, f_fac0.payload, "Hi", "server frame payload matches")
+
+    let fac1 = http::ws_encode_frame(1, "Hi", 1)
+    let f_fac1 = ws_frame_parse(fac1, 0)[0]
+    runner_assert_eq(r, len(fac1), 8, "client frame is 8 bytes (masked)")
+    runner_assert_eq(r, f_fac1.fin, 1, "client frame is final")
+    runner_assert_eq(r, f_fac1.masked, 1, "client frame is masked")
+    runner_assert_str_eq(r, f_fac1.payload, "Hi", "client frame payload matches")
 
     let failed = runner_summary(r)
     if failed > 0
