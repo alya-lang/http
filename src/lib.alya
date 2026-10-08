@@ -165,7 +165,7 @@ pub function parse_request(raw_http, remote_addr: string = "")
 end
 
 ## Formats an HttpResponse struct into a raw HTTP wire response string.
-pub function format_response(res) -> string
+pub function format_response(res: HttpResponse) -> string
     return http_format_response(res)
 end
 
@@ -175,7 +175,7 @@ pub function parse_response(raw_http)
 end
 
 ## Formats an HttpRequest struct into a raw HTTP wire request string.
-pub function format_request(req) -> string
+pub function format_request(req: HttpRequest) -> string
     return http_format_request(req)
 end
 

@@ -344,7 +344,7 @@ pub function http_parse_response_bytes(raw) -> HttpResponse
 end
 
 ## Returns the response body as bytes, converting text when needed
-pub function response_body_bytes(res) -> array
+pub function response_body_bytes(res: HttpResponse) -> array
     if res is null
         return []
     end
@@ -358,7 +358,7 @@ pub function response_body_bytes(res) -> array
 end
 
 ## Returns the response body as text (empty for binary payloads)
-pub function response_body_text(res) -> string
+pub function response_body_text(res: HttpResponse) -> string
     if res is null or res.body is null
         return ""
     end
@@ -408,7 +408,7 @@ pub function bytes_concat(a, b) -> array
 end
 
 ## Returns the request body as bytes, converting text when needed
-pub function request_body_bytes(req) -> array
+pub function request_body_bytes(req: HttpRequest) -> array
     if req is null
         return []
     end
@@ -444,7 +444,7 @@ pub function http_parse_request_bytes(raw: array, remote_addr: string = "")
 end
 
 ## Serializes an HttpRequest struct to HTTP/1.1 wire bytes (binary-body safe)
-pub function http_format_request_bytes(req) -> array
+pub function http_format_request_bytes(req: HttpRequest) -> array
     let body = request_body_bytes(req)
     if req is null
         return crypto::str_to_bytes("GET / HTTP/1.1\r\n\r\n")
@@ -484,7 +484,7 @@ pub function http_format_request_bytes(req) -> array
 end
 
 ## Serializes an HttpResponse struct to HTTP/1.1 wire bytes (binary-body safe)
-pub function http_format_response_bytes(res) -> array
+pub function http_format_response_bytes(res: HttpResponse) -> array
     if res is null
         return crypto::str_to_bytes("HTTP/1.1 500 Internal Server Error\r\n\r\n")
     end
@@ -531,7 +531,7 @@ pub function http_format_response_bytes(res) -> array
 end
 
 ## Serializes an HttpRequest struct to HTTP/1.1 wire string format
-pub function http_format_request(req) -> string
+pub function http_format_request(req: HttpRequest) -> string
     if req is null
         return "GET / HTTP/1.1\r\n\r\n"
     end
