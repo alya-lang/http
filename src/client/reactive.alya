@@ -8,6 +8,7 @@ import "../types.alya"
 import "../core/status.alya"
 import "../core/protocol.alya"
 import "../core/headers.alya"
+import "../core/sse.alya"
 import "../websocket/handshake.alya"
 import "../websocket/connection.alya"
 import "../websocket/frame.alya"
@@ -37,6 +38,20 @@ pub struct ReactiveWsClientState
     on_message_cb
     on_error_cb
     on_close_cb
+end
+
+## Represents an active Server-Sent Events (SSE) client connection.
+pub struct ReactiveSseClient
+    stream
+    req
+    buffer: string
+    headers_parsed: int
+    res
+    content_length: int
+    on_event_cb
+    on_error_cb
+    on_close_cb
+    connected: int
 end
 
 ## Generates a pseudo-random 16-byte base64-encoded Sec-WebSocket-Key nonce.
@@ -490,4 +505,201 @@ pub function client_reactive_ws_connect(loop, url_str: string, on_open = null, o
 
     ev::tcp_stream_write(stream, req_wire)
     return ws_state
+end
+
+## Dispatches all complete SSE events buffered in the client, keeping the
+## remainder for the next chunk. Returns the number of dispatched events.
+function _sse_dispatch_buffered(sse_obj: ReactiveSseClient) -> int
+    let parsed = sse_stream_parse_events(sse_obj.buffer)
+    let ev_list = parsed["events"]
+    sse_obj.buffer = parsed["remainder"]
+    let ei = 0
+    while ei < len(ev_list)
+        let ev_item: SseEvent = ev_list[ei]
+        if sse_obj.on_event_cb is not null
+            let ev_cb = sse_obj.on_event_cb
+            ev_cb(ev_item)
+        end
+        ei += 1
+    end
+    return len(ev_list)
+end
+
+## Callback invoked when data arrives on a reactive SSE client stream.
+pub function _on_reactive_sse_client_data(stream, chunk: string)
+    if stream is null or chunk is null or len(chunk) == 0
+        return false
+    end
+    let sse_obj: ReactiveSseClient = stream.data
+    if sse_obj is null
+        return false
+    end
+    sse_obj.buffer += chunk
+
+    # Fast path: headers already parsed, dispatch events incrementally.
+    if sse_obj.headers_parsed == true
+        _sse_dispatch_buffered(sse_obj)
+        return true
+    end
+
+    let delim_idx = _proto_find(sse_obj.buffer, "\r\n\r\n", 0)
+    let delim_len = 4
+    if delim_idx < 0
+        delim_idx = _proto_find(sse_obj.buffer, "\n\n", 0)
+        delim_len = 2
+    end
+    if delim_idx < 0
+        return true
+    end
+
+    let header_str = substring(sse_obj.buffer, 0, delim_idx)
+    let rem_start = delim_idx + delim_len
+    let remainder = ""
+    if rem_start < len(sse_obj.buffer)
+        remainder = substring(sse_obj.buffer, rem_start, len(sse_obj.buffer) - rem_start)
+    end
+    sse_obj.buffer = remainder
+
+    let res: HttpResponse = http_parse_response(header_str + "\r\n\r\n")
+    sse_obj.res = res
+    if res.status_code != 200
+        if sse_obj.on_error_cb is not null
+            let err_cb = sse_obj.on_error_cb
+            err_cb("SSE handshake rejected with status " + str(res.status_code))
+        end
+        ev::tcp_stream_close(stream)
+        return false
+    end
+
+    sse_obj.headers_parsed = 1
+    sse_obj.connected = 1
+    if len(sse_obj.buffer) > 0
+        _sse_dispatch_buffered(sse_obj)
+    end
+    return true
+end
+
+## Callback invoked when a reactive SSE client stream is closed.
+pub function _on_reactive_sse_client_close(stream)
+    if stream is null
+        return false
+    end
+    let sse_obj: ReactiveSseClient = stream.data
+    if sse_obj is null
+        return false
+    end
+
+    # Flush any trailing event
+    if len(trim(sse_obj.buffer)) > 0
+        sse_obj.buffer += "\n\n"
+        _sse_dispatch_buffered(sse_obj)
+    end
+    sse_obj.buffer = ""
+
+    if sse_obj.on_close_cb is not null
+        let close_cb = sse_obj.on_close_cb
+        close_cb()
+    end
+    return true
+end
+
+pub function client_reactive_sse(loop, url_str: string, headers = null, on_event = null, on_error = null, on_close = null)
+    let parsed = url_pkg::url_parse(url_str)
+    let host = parsed.host
+    let scheme = lower(parsed.scheme)
+
+    if host == "" or (scheme != "http" and scheme != "")
+        if on_error is not null
+            on_error("Invalid SSE URL: " + url_str)
+        end
+        return null
+    end
+
+    let port_str = url_pkg::url_effective_port(parsed)
+    let port = 80
+    if len(port_str) > 0
+        port = to_int(port_str)
+    end
+
+    let path = parsed.path
+    if path == ""
+        path = "/"
+    end
+    let query = parsed.query
+    let full_path = path
+    if query != ""
+        full_path += "?" + query
+    end
+
+    let req_headers = {}
+    if headers is not null
+        let ks = keys(headers)
+        let ki = 0
+        while ki < len(ks)
+            let k = ks[ki]
+            req_headers[lower(trim(k))] = headers[k]
+            ki += 1
+        end
+    end
+
+    if !has(req_headers, "host")
+        if port != 80 and port != 443
+            req_headers["host"] = host + ":" + str(port)
+        else
+            req_headers["host"] = host
+        end
+    end
+
+    if !has(req_headers, "accept")
+        req_headers["accept"] = "text/event-stream"
+    end
+
+    if !has(req_headers, "cache-control")
+        req_headers["cache-control"] = "no-cache"
+    end
+
+    if !has(req_headers, "connection")
+        req_headers["connection"] = "keep-alive"
+    end
+
+    if !has(req_headers, "user-agent")
+        req_headers["user-agent"] = "Alya-Http-SSE/0.1.0"
+    end
+
+    let req: HttpRequest = request_create("GET", full_path, query, req_headers, "")
+    let wire = http_format_request(req)
+
+    let stream = ev::tcp_client_connect(loop, host, port, null, null)
+    if stream is null
+        if on_error is not null
+            on_error("Failed to connect to " + host + ":" + str(port))
+        end
+        return null
+    end
+
+    let sse_client = ReactiveSseClient {
+        stream: stream,
+        req: req,
+        buffer: "",
+        headers_parsed: 0,
+        res: null,
+        content_length: -1,
+        on_event_cb: on_event,
+        on_error_cb: on_error,
+        on_close_cb: on_close,
+        connected: 0
+    }
+
+    stream.data = sse_client
+    stream.on_data_cb = _on_reactive_sse_client_data
+    stream.on_close_cb = _on_reactive_sse_client_close
+    ev::tcp_stream_write(stream, wire)
+    return sse_client
+end
+
+## Closes an active reactive SSE client stream connection.
+pub function client_reactive_sse_close(client: ReactiveSseClient)
+    if client is not null and client.stream is not null
+        ev::tcp_stream_close(client.stream)
+    end
 end

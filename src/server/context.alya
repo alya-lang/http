@@ -10,6 +10,7 @@ import "../core/status.alya"
 import "../core/headers.alya"
 import "../core/cookies.alya"
 import "../core/multipart.alya"
+import "../core/sse.alya"
 
 ## Creates a new HttpContext instance
 pub function ctx_new(req: HttpRequest, res: HttpResponse = null, client_sock: int = -1)
@@ -314,4 +315,137 @@ end
 ## Struct method for HttpContext.files
 pub function HttpContext.files(self: HttpContext, name: string = "") -> array
     return ctx_files(self, name)
+end
+
+## Initializes the HttpContext for Server-Sent Events (SSE).
+## Sets status to 200, Content-Type to text/event-stream, and caching headers.
+pub function ctx_sse_init(ctx: HttpContext) -> HttpContext
+    if ctx is null
+        return ctx
+    end
+    ctx_status(ctx, 200)
+    let res: HttpResponse = ctx.res
+    header_set(res.headers, "Content-Type", "text/event-stream; charset=utf-8")
+    header_set(res.headers, "Cache-Control", "no-cache")
+    header_set(res.headers, "Connection", "keep-alive")
+    if !has(ctx.data, "_sse_initialized")
+        ctx.data["_sse_initialized"] = 1
+    end
+    return ctx
+end
+
+## Sends an SSE event through the HttpContext.
+pub function ctx_sse_send(ctx: HttpContext, data: string, event_name: string = "", id: string = "", retry: int = -1, comment: string = "") -> HttpContext
+    if ctx is null
+        return ctx
+    end
+    if !has(ctx.data, "_sse_initialized")
+        ctx_sse_init(ctx)
+    end
+    let ev = sse_event_create(data, event_name, id, retry, comment)
+    let wire = sse_event_format(ev)
+    let res: HttpResponse = ctx.res
+    if res.body is null or res.body == ""
+        res.body = wire
+    else
+        res.body += wire
+    end
+    return ctx
+end
+
+## Convenience helper to send an SSE message on the HttpContext.
+pub function ctx_sse(ctx: HttpContext, data: string, event_name: string = "", id: string = "") -> HttpContext
+    return ctx_sse_send(ctx, data, event_name, id)
+end
+
+## Convenience helper to send an SseEvent instance on the HttpContext.
+pub function ctx_sse_event(ctx: HttpContext, event: SseEvent) -> HttpContext
+    if ctx is null or event is null
+        return ctx
+    end
+    return ctx_sse_send(ctx, event.data, event.event, event.id, event.retry, event.comment)
+end
+
+## Convenience helper to send an SSE comment/keep-alive ping on the HttpContext.
+pub function ctx_sse_comment(ctx: HttpContext, comment: string) -> HttpContext
+    return ctx_sse_send(ctx, "", "", "", -1, comment)
+end
+
+## Initializes the HttpContext for chunked transfer encoding.
+pub function ctx_chunk_init(ctx: HttpContext, content_type: string = "application/octet-stream") -> HttpContext
+    if ctx is null
+        return ctx
+    end
+    ctx_status(ctx, 200)
+    let res: HttpResponse = ctx.res
+    header_set(res.headers, "Content-Type", content_type)
+    header_set(res.headers, "Transfer-Encoding", "chunked")
+    res.headers = header_remove(res.headers, "Content-Length")
+    if !has(ctx.data, "_chunked_initialized")
+        ctx.data["_chunked_initialized"] = 1
+    end
+    return ctx
+end
+
+## Appends a chunk to the response body using HTTP/1.1 chunked encoding.
+pub function ctx_chunk_send(ctx: HttpContext, chunk_data: string) -> HttpContext
+    if ctx is null
+        return ctx
+    end
+    if !has(ctx.data, "_chunked_initialized")
+        ctx_chunk_init(ctx)
+    end
+    let encoded = http_chunk_encode(chunk_data)
+    let res: HttpResponse = ctx.res
+    if res.body is null or res.body == ""
+        res.body = encoded
+    else
+        res.body += encoded
+    end
+    return ctx
+end
+
+## Finalizes the chunked transfer encoding response by writing the terminating chunk.
+pub function ctx_chunk_end(ctx: HttpContext) -> HttpContext
+    if ctx is null
+        return ctx
+    end
+    let res: HttpResponse = ctx.res
+    let end_chunk = http_chunk_end()
+    if res.body is null or res.body == ""
+        res.body = end_chunk
+    else
+        res.body += end_chunk
+    end
+    return ctx
+end
+
+## Convenience helper for chunked transfer response chunk.
+pub function ctx_chunk(ctx: HttpContext, chunk_data: string) -> HttpContext
+    return ctx_chunk_send(ctx, chunk_data)
+end
+
+## Struct method for HttpContext.sse
+pub function HttpContext.sse(self: HttpContext, data: string, event_name: string = "", id: string = "") -> HttpContext
+    return ctx_sse(self, data, event_name, id)
+end
+
+## Struct method for HttpContext.send_event
+pub function HttpContext.send_event(self: HttpContext, event: SseEvent) -> HttpContext
+    return ctx_sse_event(self, event)
+end
+
+## Struct method for HttpContext.sse_comment
+pub function HttpContext.sse_comment(self: HttpContext, comment: string) -> HttpContext
+    return ctx_sse_comment(self, comment)
+end
+
+## Struct method for HttpContext.chunk
+pub function HttpContext.chunk(self: HttpContext, chunk_data: string) -> HttpContext
+    return ctx_chunk_send(self, chunk_data)
+end
+
+## Struct method for HttpContext.chunk_end
+pub function HttpContext.chunk_end(self: HttpContext) -> HttpContext
+    return ctx_chunk_end(self)
 end

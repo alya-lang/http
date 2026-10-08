@@ -1,0 +1,121 @@
+## Test Reactive SSE Client Integration over EventLoop
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "std/test"
+import "event" as ev
+import "../src/types.alya"
+import "../src/lib.alya" as http
+
+struct SseTestState
+    items
+    comments: int
+    close_done: int
+    error_msg: string
+end
+
+let g_sse_state = SseTestState {
+    items: [],
+    comments: 0,
+    close_done: 0,
+    error_msg: ""
+}
+
+function handle_srv_sse_feed(ctx)
+    http::ctx_sse(ctx, "sse-hello-1", "greet", "1")
+    http::ctx_sse(ctx, "sse-hello-2", "greet", "2")
+    http::ctx_sse_comment(ctx, "done-pulse")
+    return ctx
+end
+
+function on_sse_event(ev_item: SseEvent)
+    if ev_item.is_comment() == true
+        g_sse_state.comments += 1
+    else
+        push(g_sse_state.items, ev_item.data + "|" + ev_item.event + "|" + ev_item.id)
+    end
+end
+
+function on_sse_err(err)
+    g_sse_state.error_msg = err
+end
+
+function on_sse_close()
+    g_sse_state.close_done = 1
+end
+
+@cfg(feature = "event")
+function main()
+    test_suite("Reactive SSE Client Tests")
+    let r = runner_new()
+
+    let l = ev::loop()
+    let port = 19886
+    let host = "127.0.0.1"
+
+    # Setup Reactive HTTP Server with an SSE route
+    let rt = http::router()
+    http::router_get(rt, "/events", handle_srv_sse_feed)
+
+    let srv = http::server(port, host, rt)
+    http::server_use_event_loop(srv, l)
+    runner_assert_eq(r, srv.running, 1, "server started on event loop")
+
+    # SECTION 1: Reactive SSE subscribe, two events + comment, then close
+    say "--- SECTION 1 (Reactive SSE Stream) ---"
+
+    http::reactive_sse(l, "http://" + host + ":" + str(port) + "/events", null, on_sse_event, on_sse_err, on_sse_close)
+
+    let ticks = 0
+    while ticks < 100 and (len(g_sse_state.items) < 2 or g_sse_state.close_done == 0)
+        let events = ev::loop_tick(l, 50)
+        for e in events
+            ev::loop_dispatch_event(e)
+        end
+        ticks += 1
+    end
+
+    runner_assert_eq(r, len(g_sse_state.items), 2, "two SSE events received")
+    runner_assert_str_eq(r, g_sse_state.items[0], "sse-hello-1|greet|1", "first event data/type/id match")
+    runner_assert_str_eq(r, g_sse_state.items[1], "sse-hello-2|greet|2", "second event data/type/id match")
+    runner_assert_eq(r, g_sse_state.comments, 1, "keep-alive comment dispatched")
+    runner_assert_eq(r, g_sse_state.close_done, 1, "SSE stream closed after response")
+    runner_assert_str_eq(r, g_sse_state.error_msg, "", "no client error on happy path")
+
+    # SECTION 2: Non-200 SSE endpoint reports an error
+    say "--- SECTION 2 (SSE Error Path) ---"
+
+    http::reactive_sse(l, "http://" + host + ":" + str(port) + "/nope", null, on_sse_event, on_sse_err, on_sse_close)
+
+    ticks = 0
+    while ticks < 100 and g_sse_state.error_msg == ""
+        let events = ev::loop_tick(l, 50)
+        for e in events
+            ev::loop_dispatch_event(e)
+        end
+        ticks += 1
+    end
+
+    runner_assert(r, index_of(g_sse_state.error_msg, "404") >= 0, "non-200 SSE endpoint reports status error")
+
+    # SECTION 3: Shutdown
+    say "--- SECTION 3 (Shutdown) ---"
+    http::server_close_reactive(srv)
+    runner_assert_eq(r, srv.running, 0, "reactive server stopped")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+@cfg(not(feature = "event"))
+function main()
+    test_suite("Reactive SSE Client Tests (skipped without event feature)")
+    let r = runner_new()
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

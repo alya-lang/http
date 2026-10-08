@@ -229,7 +229,7 @@ pub function ws_feed(ws: WebSocketConnection, chunk)
             end
         else
             if frame.masked == true
-                _ws_protocol_error(ws, "server frame must not be masked")
+                _ws_protocol_error(ws, "protocol error")
                 break
             end
         end

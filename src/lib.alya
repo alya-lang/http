@@ -7,6 +7,7 @@ import "./core/headers.alya"
 import "./core/cookies.alya"
 import "./core/protocol.alya"
 import "./core/multipart.alya"
+import "./core/sse.alya"
 import "./router/route.alya"
 import "./router/router.alya"
 import "./router/group.alya"
@@ -319,4 +320,60 @@ end
 ## Constructs a standard Content-Type header value for a multipart request.
 pub function multipart_content_type(boundary: string) -> string
     return multipart_build_content_type(boundary)
+end
+
+## Creates an SseEvent instance.
+pub function sse_event(data: string = "", event: string = "", id: string = "", retry: int = -1, comment: string = "") -> SseEvent
+    return sse_event_create(data, event, id, retry, comment)
+end
+
+## Formats an SseEvent instance into Server-Sent Events wire format.
+pub function sse_format_event(event: SseEvent) -> string
+    return event.format()
+end
+
+## Convenience helper to format an SSE event message string.
+pub function sse_format(data: string = "", event_name: string = "", id: string = "", retry: int = -1, comment: string = "") -> string
+    return sse_format_event(sse_event_create(data, event_name, id, retry, comment))
+end
+
+## Parses a single raw Server-Sent Event block into an SseEvent instance.
+pub function sse_parse(raw: string) -> SseEvent
+    return sse_parse_block(raw)
+end
+
+## Parses a continuous SSE stream buffer into completed events and remaining buffer.
+pub function sse_stream_parse(stream_buffer: string) -> map
+    return sse_stream_parse_events(stream_buffer)
+end
+
+## Encodes a chunk of data into HTTP/1.1 chunked transfer encoding wire format.
+pub function chunk_encode(chunk: string) -> string
+    return http_chunk_encode(chunk)
+end
+
+## Returns the terminating chunk for HTTP/1.1 chunked transfer encoding (0\r\n\r\n).
+pub function chunk_end() -> string
+    return http_chunk_end()
+end
+
+## Decodes an HTTP/1.1 chunked transfer encoding wire payload into raw content.
+pub function chunk_decode(raw: string) -> string
+    return http_chunk_decode(raw)
+end
+
+## Connects asynchronously to a Server-Sent Events (SSE) endpoint over the EventLoop.
+##
+## Requires the `event` feature (default-on).
+@cfg(feature = "event")
+pub function reactive_sse(loop, url_str: string, headers = null, on_event = null, on_error = null, on_close = null)
+    return client_reactive_sse(loop, url_str, headers, on_event, on_error, on_close)
+end
+
+## Closes an active reactive SSE client stream connection.
+##
+## Requires the `event` feature (default-on).
+@cfg(feature = "event")
+pub function reactive_sse_close(sse_state)
+    return client_reactive_sse_close(sse_state)
 end

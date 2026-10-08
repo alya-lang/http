@@ -1,0 +1,325 @@
+## Server-Sent Events (SSE) and HTTP/1.1 Chunked Transfer Encoding.
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "../types.alya"
+import "./protocol.alya"
+
+## Converts a non-negative integer into its lowercase hexadecimal string representation.
+pub function _sse_int_to_hex(val: int) -> string
+    if val <= 0
+        return "0"
+    end
+    let digits = "0123456789abcdef"
+    let res = ""
+    let n = val
+    while n > 0
+        let rem = n % 16
+        res = char_at(digits, rem) + res
+        n /= 16
+    end
+    return res
+end
+
+## Converts a hexadecimal string representation into an integer.
+pub function _sse_hex_to_int(hex_str: string) -> int
+    let s = lower(trim(hex_str))
+    let res = 0
+    let i = 0
+    while i < len(s)
+        let ch = char_at(s, i)
+        let val = -1
+        if ch >= "0" and ch <= "9"
+            val = to_int(ch)
+        elif ch == "a"
+            val = 10
+        elif ch == "b"
+            val = 11
+        elif ch == "c"
+            val = 12
+        elif ch == "d"
+            val = 13
+        elif ch == "e"
+            val = 14
+        elif ch == "f"
+            val = 15
+        end
+        if val < 0
+            break
+        end
+        res = res * 16 + val
+        i += 1
+    end
+    return res
+end
+
+## Encodes a chunk of data into HTTP/1.1 Chunked Transfer Encoding wire format.
+##
+## ### Parameters
+## - `chunk`: Chunk content string to encode.
+##
+## ### Returns
+## Formatted chunk string: `<hex-size>\r\n<data>\r\n`.
+pub function http_chunk_encode(chunk: string) -> string
+    if chunk is null or len(chunk) == 0
+        return "0\r\n\r\n"
+    end
+    return _sse_int_to_hex(len(chunk)) + "\r\n" + chunk + "\r\n"
+end
+
+## Returns the terminating chunk for HTTP/1.1 Chunked Transfer Encoding (`0\r\n\r\n`).
+pub function http_chunk_end() -> string
+    return "0\r\n\r\n"
+end
+
+## Decodes an HTTP/1.1 Chunked Transfer Encoding wire payload into raw content.
+##
+## ### Parameters
+## - `raw`: Raw chunked payload string.
+##
+## ### Returns
+## The concatenated decoded payload string.
+pub function http_chunk_decode(raw: string) -> string
+    if raw is null or len(raw) == 0
+        return ""
+    end
+    let decoded = ""
+    let pos = 0
+    let rlen = len(raw)
+
+    while pos < rlen
+        let line_end = _proto_find(raw, "\r\n", pos)
+        let delim_len = 2
+        if line_end < 0
+            line_end = _proto_find(raw, "\n", pos)
+            delim_len = 1
+            if line_end < 0
+                break
+            end
+        end
+
+        let size_str = trim(substring(raw, pos, line_end - pos))
+        let semi_idx = _proto_find(size_str, ";", 0)
+        if semi_idx >= 0
+            size_str = substring(size_str, 0, semi_idx)
+        end
+        size_str = trim(size_str)
+        if size_str == ""
+            pos = line_end + delim_len
+            continue
+        end
+
+        let chunk_size = _sse_hex_to_int(size_str)
+        if chunk_size <= 0
+            break
+        end
+
+        let data_start = line_end + delim_len
+        if data_start + chunk_size <= rlen
+            let chunk_data = substring(raw, data_start, chunk_size)
+            decoded += chunk_data
+            pos = data_start + chunk_size
+            if pos < rlen and char_at(raw, pos) == "\r"
+                pos += 1
+            end
+            if pos < rlen and char_at(raw, pos) == "\n"
+                pos += 1
+            end
+        else
+            break
+        end
+    end
+
+    return decoded
+end
+
+## Formats an SseEvent into W3C Server-Sent Events wire format.
+##
+## ### Parameters
+## - `event`: SseEvent instance to format.
+##
+## ### Returns
+## Formatted SSE wire string terminated with double newline.
+pub function sse_event_format(event: SseEvent) -> string
+    if event is null
+        return "\n"
+    end
+    let res = ""
+    if event.comment is not null and event.comment != ""
+        res += ": " + event.comment + "\n"
+    end
+    if event.event is not null and event.event != ""
+        res += "event: " + event.event + "\n"
+    end
+    if event.id is not null and event.id != ""
+        res += "id: " + event.id + "\n"
+    end
+    if event.retry is not null and event.retry >= 0
+        res += "retry: " + str(event.retry) + "\n"
+    end
+    if event.data is not null and event.data != ""
+        let d = event.data
+        let lines = split(d, "\n")
+        let i = 0
+        while i < len(lines)
+            let line = lines[i]
+            if len(line) > 0 and char_at(line, len(line) - 1) == "\r"
+                line = substring(line, 0, len(line) - 1)
+            end
+            res += "data: " + line + "\n"
+            i += 1
+        end
+    end
+    res += "\n"
+    return res
+end
+
+## Convenience helper to format an SSE event message directly from values.
+##
+## ### Parameters
+## - `data`: Event payload string. Defaults to `""`.
+## - `event_name`: Custom event type string. Defaults to `""`.
+## - `id`: Event ID string. Defaults to `""`.
+## - `retry`: Client reconnection retry delay in milliseconds. Defaults to `-1`.
+## - `comment`: SSE comment string. Defaults to `""`.
+##
+## ### Returns
+## Formatted SSE wire string.
+pub function sse_format_wire(data: string = "", event_name: string = "", id: string = "", retry: int = -1, comment: string = "") -> string
+    let ev = sse_event_create(data, event_name, id, retry, comment)
+    return sse_event_format(ev)
+end
+
+## Parses a single raw Server-Sent Event message block into an SseEvent struct.
+##
+## ### Parameters
+## - `raw`: Raw SSE block text.
+##
+## ### Returns
+## Initialized `SseEvent` instance.
+pub function sse_parse_block(raw: string) -> SseEvent
+    let event_name = ""
+    let id = ""
+    let retry = -1
+    let comment = ""
+    let data_lines = []
+
+    if raw is null or raw == ""
+        return sse_event_create("", "", "", -1, "")
+    end
+
+    let lines = split(raw, "\n")
+    let i = 0
+    while i < len(lines)
+        let line = lines[i]
+        if len(line) > 0 and char_at(line, len(line) - 1) == "\r"
+            line = substring(line, 0, len(line) - 1)
+        end
+        if len(line) > 0
+            if char_at(line, 0) == ":"
+                let c = substring(line, 1, len(line) - 1)
+                if len(c) > 0 and char_at(c, 0) == " "
+                    c = substring(c, 1, len(c) - 1)
+                end
+                if comment == ""
+                    comment = c
+                else
+                    comment += "\n" + c
+                end
+            elif len(line) >= 5 and substring(line, 0, 5) == "data:"
+                let d = substring(line, 5, len(line) - 5)
+                if len(d) > 0 and char_at(d, 0) == " "
+                    d = substring(d, 1, len(d) - 1)
+                end
+                push(data_lines, d)
+            elif len(line) >= 6 and substring(line, 0, 6) == "event:"
+                let ev = substring(line, 6, len(line) - 6)
+                if len(ev) > 0 and char_at(ev, 0) == " "
+                    ev = substring(ev, 1, len(ev) - 1)
+                end
+                event_name = ev
+            elif len(line) >= 3 and substring(line, 0, 3) == "id:"
+                let eid = substring(line, 3, len(line) - 3)
+                if len(eid) > 0 and char_at(eid, 0) == " "
+                    eid = substring(eid, 1, len(eid) - 1)
+                end
+                id = eid
+            elif len(line) >= 6 and substring(line, 0, 6) == "retry:"
+                let r = substring(line, 6, len(line) - 6)
+                if len(r) > 0 and char_at(r, 0) == " "
+                    r = substring(r, 1, len(r) - 1)
+                end
+                retry = to_int(r)
+            end
+        end
+        i += 1
+    end
+
+    let full_data = ""
+    let di = 0
+    while di < len(data_lines)
+        if di > 0
+            full_data += "\n"
+        end
+        full_data += data_lines[di]
+        di += 1
+    end
+
+    return sse_event_create(full_data, event_name, id, retry, comment)
+end
+
+## Parses a continuous SSE stream buffer into completed events and remaining unparsed buffer.
+##
+## ### Parameters
+## - `stream_buffer`: Accumulated byte/text buffer.
+##
+## ### Returns
+## Map containing `events` array of `SseEvent` items and `remainder` string.
+pub function sse_stream_parse_events(stream_buffer: string) -> map
+    let events = []
+    let buf = stream_buffer
+    if buf is null or buf == ""
+        return { "events": events, "remainder": "" }
+    end
+
+    while 1
+        let delim_idx = _proto_find(buf, "\n\n", 0)
+        let delim_len = 2
+        let crlf_idx = _proto_find(buf, "\r\n\r\n", 0)
+        if crlf_idx >= 0 and (delim_idx < 0 or crlf_idx < delim_idx)
+            delim_idx = crlf_idx
+            delim_len = 4
+        end
+
+        if delim_idx < 0
+            break
+        end
+
+        let raw_event = substring(buf, 0, delim_idx)
+        let rem_start = delim_idx + delim_len
+        let remainder = ""
+        if rem_start < len(buf)
+            remainder = substring(buf, rem_start, len(buf) - rem_start)
+        end
+        buf = remainder
+
+        if len(trim(raw_event)) > 0
+            let ev = sse_parse_block(raw_event)
+            push(events, ev)
+        end
+    end
+
+    return { "events": events, "remainder": buf }
+end
+
+## Struct method for SseEvent.format
+pub function SseEvent.format(self: SseEvent) -> string
+    return sse_event_format(self)
+end
+
+## Struct method for SseEvent.is_comment
+pub function SseEvent.is_comment(self: SseEvent) -> int
+    if self is null
+        return false
+    end
+    return self.comment != "" and self.data == ""
+end

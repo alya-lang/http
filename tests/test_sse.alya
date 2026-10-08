@@ -1,0 +1,217 @@
+## Test Server-Sent Events (SSE) and HTTP/1.1 Chunked Transfer Encoding Toolkit
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "std/test"
+import "../src/types.alya"
+import "../src/lib.alya" as http
+
+function starts_with_prefix(s: string, p: string) -> int
+    if len(s) < len(p)
+        return 0
+    end
+    return substring(s, 0, len(p)) == p
+end
+
+function main()
+    test_suite("Server-Sent Events & Chunked Transfer Tests")
+    let r = runner_new()
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECTION 1: SseEvent Construction and Defaults
+    # ═══════════════════════════════════════════════════════════════
+    say "--- SECTION 1 (SseEvent Construction) ---"
+    let ev1 = http::sse_event("payload_val", "greeting", "evt_1", 3000, "ping_cmt")
+    runner_assert_str_eq(r, ev1.data, "payload_val", "ev1 data matches")
+    runner_assert_str_eq(r, ev1.event, "greeting", "ev1 event matches")
+    runner_assert_str_eq(r, ev1.id, "evt_1", "ev1 id matches")
+    runner_assert_eq(r, ev1.retry, 3000, "ev1 retry matches")
+    runner_assert_str_eq(r, ev1.comment, "ping_cmt", "ev1 comment matches")
+
+    let def_ev = http::sse_event()
+    runner_assert_str_eq(r, def_ev.data, "", "default data is empty")
+    runner_assert_str_eq(r, def_ev.event, "", "default event is empty")
+    runner_assert_str_eq(r, def_ev.id, "", "default id is empty")
+    runner_assert_eq(r, def_ev.retry, -1, "default retry is -1")
+    runner_assert_str_eq(r, def_ev.comment, "", "default comment is empty")
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECTION 2: SSE Wire Formatting
+    # ═══════════════════════════════════════════════════════════════
+    say "--- SECTION 2 (SSE Wire Formatting) ---"
+    let ev_simple = http::sse_event("Hello World")
+    let wire_simple = http::sse_format_event(ev_simple)
+    runner_assert_str_eq(r, wire_simple, "data: Hello World\n\n", "simple data wire format")
+
+    let ev_custom = http::sse_event("user logged in", "auth", "evt-99", 2500)
+    let wire_custom = http::sse_format_event(ev_custom)
+    runner_assert(r, index_of(wire_custom, "event: auth\n") >= 0, "wire contains event")
+    runner_assert(r, index_of(wire_custom, "id: evt-99\n") >= 0, "wire contains id")
+    runner_assert(r, index_of(wire_custom, "retry: 2500\n") >= 0, "wire contains retry")
+    runner_assert(r, index_of(wire_custom, "data: user logged in\n") >= 0, "wire contains data")
+
+    # Multiline payload
+    let ev_multi = http::sse_event("row 1\nrow 2\nrow 3")
+    let wire_multi = http::sse_format_event(ev_multi)
+    runner_assert_str_eq(r, wire_multi, "data: row 1\ndata: row 2\ndata: row 3\n\n", "multiline wire format")
+
+    # Keep-alive comment
+    let ev_cmt = http::sse_event("", "", "", -1, "pulse 123")
+    let wire_cmt = http::sse_format_event(ev_cmt)
+    runner_assert_str_eq(r, wire_cmt, ": pulse 123\n\n", "comment wire format")
+    runner_assert_eq(r, ev_cmt.is_comment(), 1, "is_comment reports true for comment")
+    runner_assert_eq(r, ev_simple.is_comment(), 0, "is_comment reports false for standard event")
+
+    # sse_format facade helper
+    let wire_facade = http::sse_format("quick message", "alert")
+    runner_assert_str_eq(r, wire_facade, "event: alert\ndata: quick message\n\n", "sse_format facade format")
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECTION 3: SSE Parsing
+    # ═══════════════════════════════════════════════════════════════
+    say "--- SECTION 3 (SSE Parsing) ---"
+    let raw_block = "event: message\nid: 42\nretry: 5000\ndata: active update\n\n"
+    let parsed1 = http::sse_parse(raw_block)
+    runner_assert_str_eq(r, parsed1.event, "message", "parsed event is message")
+    runner_assert_str_eq(r, parsed1.id, "42", "parsed id is 42")
+    runner_assert_eq(r, parsed1.retry, 5000, "parsed retry is 5000")
+    runner_assert_str_eq(r, parsed1.data, "active update", "parsed data matches")
+
+    let raw_multiline = "data: alpha\ndata: beta\ndata: gamma\n\n"
+    let parsed_multi = http::sse_parse(raw_multiline)
+    runner_assert_str_eq(r, parsed_multi.data, "alpha\nbeta\ngamma", "parsed multiline data reconstructed")
+
+    let raw_cmt_block = ": keepalive heartbeat\n\n"
+    let parsed_cmt = http::sse_parse(raw_cmt_block)
+    runner_assert_str_eq(r, parsed_cmt.comment, "keepalive heartbeat", "parsed comment matches")
+    runner_assert_str_eq(r, parsed_cmt.data, "", "parsed comment has empty data")
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECTION 4: SSE Stream Parsing
+    # ═══════════════════════════════════════════════════════════════
+    say "--- SECTION 4 (SSE Stream Parsing) ---"
+    let stream_data = "event: ping\ndata: pong\n\n: keepalive\n\nevent: tick\ndata: 100\n\nunfinished trailing data"
+    let parsed_stream = http::sse_stream_parse(stream_data)
+    let ev_list = parsed_stream["events"]
+    let remainder = parsed_stream["remainder"]
+
+    runner_assert_eq(r, len(ev_list), 3, "stream parsed 3 complete events")
+    let e0: SseEvent = ev_list[0]
+    runner_assert_str_eq(r, e0.event, "ping", "stream event 0 event matches")
+    runner_assert_str_eq(r, e0.data, "pong", "stream event 0 data matches")
+
+    let e1: SseEvent = ev_list[1]
+    runner_assert_str_eq(r, e1.comment, "keepalive", "stream event 1 is comment")
+
+    let e2: SseEvent = ev_list[2]
+    runner_assert_str_eq(r, e2.event, "tick", "stream event 2 event matches")
+    runner_assert_str_eq(r, e2.data, "100", "stream event 2 data matches")
+
+    runner_assert_str_eq(r, remainder, "unfinished trailing data", "remainder holds uncompleted data")
+
+    # Complete the remainder
+    let stream_data_next = remainder + "\n\n"
+    let parsed_stream_next = http::sse_stream_parse(stream_data_next)
+    runner_assert_eq(r, len(parsed_stream_next["events"]), 1, "completed remainder parsed")
+    runner_assert_str_eq(r, parsed_stream_next["remainder"], "", "final remainder empty")
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECTION 5: Chunked Transfer Encoding
+    # ═══════════════════════════════════════════════════════════════
+    say "--- SECTION 5 (Chunked Transfer Encoding) ---"
+    let c1 = http::chunk_encode("Wiki")
+    runner_assert_str_eq(r, c1, "4\r\nWiki\r\n", "chunk Wiki encoded correctly")
+
+    let c2 = http::chunk_encode("hello world")
+    runner_assert_str_eq(r, c2, "b\r\nhello world\r\n", "chunk hello world encoded correctly")
+
+    let c_end = http::chunk_end()
+    runner_assert_str_eq(r, c_end, "0\r\n\r\n", "chunk end marker matches")
+
+    # Roundtrip decode
+    let full_stream = http::chunk_encode("Alya ") + http::chunk_encode("Chunked ") + http::chunk_encode("Stream") + http::chunk_end()
+    let decoded_stream = http::chunk_decode(full_stream)
+    runner_assert_str_eq(r, decoded_stream, "Alya Chunked Stream", "decoded chunked stream roundtrip matches")
+
+    let empty_dec = http::chunk_decode("0\r\n\r\n")
+    runner_assert_str_eq(r, empty_dec, "", "empty chunk decode returns empty")
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECTION 6: HttpContext SSE Integration
+    # ═══════════════════════════════════════════════════════════════
+    say "--- SECTION 6 (HttpContext SSE Integration) ---"
+    let req1 = http::request("GET", "/events")
+    let ctx1 = http::ctx(req1)
+
+    ctx1.sse("First notification", "notify", "1")
+    ctx1.sse("Second notification", "notify", "2")
+    ctx1.sse_comment("keepalive pulse")
+
+    let res1: HttpResponse = ctx1.res
+    runner_assert_eq(r, res1.status_code, 200, "SSE context status code 200")
+    runner_assert_str_eq(r, http::header_get(res1.headers, "Content-Type"), "text/event-stream; charset=utf-8", "SSE Content-Type header")
+    runner_assert_str_eq(r, http::header_get(res1.headers, "Cache-Control"), "no-cache", "SSE Cache-Control header")
+    runner_assert_str_eq(r, http::header_get(res1.headers, "Connection"), "keep-alive", "SSE Connection header")
+
+    runner_assert(r, index_of(res1.body, "event: notify\n") >= 0, "body contains event: notify")
+    runner_assert(r, index_of(res1.body, "data: First notification\n") >= 0, "body contains first notification")
+    runner_assert(r, index_of(res1.body, "data: Second notification\n") >= 0, "body contains second notification")
+    runner_assert(r, index_of(res1.body, ": keepalive pulse\n") >= 0, "body contains keepalive comment")
+
+    # send_event object method
+    let ev_obj = http::sse_event("object event payload", "custom_evt")
+    ctx1.send_event(ev_obj)
+    runner_assert(r, index_of(res1.body, "event: custom_evt\n") >= 0, "body contains custom_evt")
+    runner_assert(r, index_of(res1.body, "data: object event payload\n") >= 0, "body contains object event payload")
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECTION 7: HttpContext Chunked Transfer Integration
+    # ═══════════════════════════════════════════════════════════════
+    say "--- SECTION 7 (HttpContext Chunked Integration) ---"
+    let req2 = http::request("GET", "/download")
+    let ctx2 = http::ctx(req2)
+
+    ctx2.chunk("Part A | ")
+    ctx2.chunk("Part B | ")
+    ctx2.chunk("Part C")
+    ctx2.chunk_end()
+
+    let res2: HttpResponse = ctx2.res
+    runner_assert_eq(r, res2.status_code, 200, "chunked context status code 200")
+    runner_assert_str_eq(r, http::header_get(res2.headers, "Transfer-Encoding"), "chunked", "Transfer-Encoding header is chunked")
+    runner_assert(r, !has(res2.headers, "content-length"), "content-length removed in chunked mode")
+
+    let decoded_body = http::chunk_decode(res2.body)
+    runner_assert_str_eq(r, decoded_body, "Part A | Part B | Part C", "decoded context body matches")
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECTION 8: Streaming Chunk Accumulation
+    # ═══════════════════════════════════════════════════════════════
+    say "--- SECTION 8 (Streaming Chunk Accumulation) ---"
+    let stream_buf = ""
+
+    # Chunk 1: partial event
+    stream_buf += "event: chunk1\ndata: partA"
+    let p1 = http::sse_stream_parse(stream_buf)
+    runner_assert_eq(r, len(p1["events"]), 0, "no events emitted on incomplete chunk")
+    stream_buf = p1["remainder"]
+    runner_assert_str_eq(r, stream_buf, "event: chunk1\ndata: partA", "remainder preserved across chunks")
+
+    # Chunk 2: completes event 1, and contains full event 2
+    stream_buf += "\n\nevent: chunk2\ndata: partB\n\n"
+    let p2 = http::sse_stream_parse(stream_buf)
+    runner_assert_eq(r, len(p2["events"]), 2, "two events emitted")
+    let ev_c1: SseEvent = p2["events"][0]
+    let ev_c2: SseEvent = p2["events"][1]
+    runner_assert_str_eq(r, ev_c1.event, "chunk1", "chunk 1 event name")
+    runner_assert_str_eq(r, ev_c1.data, "partA", "chunk 1 payload")
+    runner_assert_str_eq(r, ev_c2.event, "chunk2", "chunk 2 event name")
+    runner_assert_str_eq(r, ev_c2.data, "partB", "chunk 2 payload")
+    runner_assert_str_eq(r, p2["remainder"], "", "stream buffer empty after complete chunks")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

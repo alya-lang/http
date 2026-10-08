@@ -232,6 +232,43 @@ pub struct MultipartData
     file_list: array
 end
 
+## Represents a Server-Sent Event (SSE) message according to W3C EventSource specifications.
+##
+## ### Fields
+## - `data`: Event payload string content.
+## - `event`: Event type classification string (empty for generic message).
+## - `id`: Resumption event ID string.
+## - `retry`: Client reconnection retry delay in milliseconds (-1 if unset).
+## - `comment`: SSE comment string (for keep-alive or ping pulses).
+pub struct SseEvent
+    id: string
+    event: string
+    retry: int
+    comment: string
+    data: string
+end
+
+## Factory for creating an SseEvent instance.
+##
+## ### Parameters
+## - `data`: Event payload string. Defaults to `""`.
+## - `event`: Event type name string. Defaults to `""`.
+## - `id`: Event ID string. Defaults to `""`.
+## - `retry`: Retry timeout integer in milliseconds. Defaults to `-1`.
+## - `comment`: SSE comment or keep-alive ping. Defaults to `""`.
+##
+## ### Returns
+## The new `SseEvent` instance.
+pub function sse_event_create(data: string = "", event: string = "", id: string = "", retry: int = -1, comment: string = "") -> SseEvent
+    return SseEvent {
+        id: id,
+        event: event,
+        retry: retry,
+        comment: comment,
+        data: data
+    }
+end
+
 ## Factory for creating an HttpCookie instance.
 ##
 ## ### Parameters
