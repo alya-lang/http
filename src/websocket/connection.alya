@@ -27,6 +27,8 @@ pub struct WebSocketConnection
     on_ping_cb
     on_pong_cb
     on_error_cb
+    frag_opcode: int
+    frag_buffer
 end
 
 # ═══════════════════════════════════════════════════════════════
@@ -62,7 +64,9 @@ pub function ws_connection_new(stream, is_server: int = 1, write_fn = null, clos
         on_close_cb: null,
         on_ping_cb: null,
         on_pong_cb: null,
-        on_error_cb: null
+        on_error_cb: null,
+        frag_opcode: -1,
+        frag_buffer: ""
     }
 end
 
@@ -160,6 +164,16 @@ end
 # Stream Feeding & Frame Ingestion
 # ═══════════════════════════════════════════════════════════════
 
+# Fails the connection with a 1002 (protocol error) close after notifying
+# the error callback, if any. Callers must stop feeding after this.
+function _ws_protocol_error(ws: WebSocketConnection, reason: string)
+    let cb = ws.on_error_cb
+    if cb is not null
+        cb(ws, reason)
+    end
+    ws_close(ws, 1002, reason)
+end
+
 ## Feeds incoming network data into the connection buffer and processes all frames
 pub function ws_feed(ws: WebSocketConnection, chunk)
     if ws is null or chunk is null or len(chunk) == 0
@@ -188,43 +202,104 @@ pub function ws_feed(ws: WebSocketConnection, chunk)
 
         frames_processed += 1
 
-        # Process frame based on OpCode
-        when frame.opcode
-            is WebSocketOpCode.Text then
-                let cb = ws.on_message_cb
-                if cb is not null
-                    cb(ws, frame.payload, 0)
-                end
-            is WebSocketOpCode.Binary then
-                let cb = ws.on_message_cb
-                if cb is not null
-                    cb(ws, frame.payload, 1)
-                end
-            is WebSocketOpCode.Ping then
-                # Automatic RFC 6455 Ping-Pong reply
-                ws_pong(ws, frame.payload)
-                let cb = ws.on_ping_cb
-                if cb is not null
-                    cb(ws, frame.payload)
-                end
-            is WebSocketOpCode.Pong then
-                let cb = ws.on_pong_cb
-                if cb is not null
-                    cb(ws, frame.payload)
-                end
-            is WebSocketOpCode.Close then
-                let code = 1000
-                let reason = ""
-                if frame.len >= 2
-                    let b0 = ord(char_at(frame.payload, 0))
-                    let b1 = ord(char_at(frame.payload, 1))
-                    code = bit_or(bit_shl(b0, 8), b1)
-                    if frame.len > 2
-                        reason = substring(frame.payload, 2, frame.len - 2)
-                    end
-                end
-                ws_close(ws, code, reason)
+        let op = frame.opcode
+
+        # ── RFC 6455 §5.4/§5.5: opcode + control-frame validation ──
+        if op >= 8
+            if op != WebSocketOpCode.Close and op != WebSocketOpCode.Ping and op != WebSocketOpCode.Pong
+                _ws_protocol_error(ws, "unknown opcode " + str(op))
                 break
+            end
+            # Control frames MUST NOT be fragmented and carry at most 125 bytes.
+            if frame.fin == false or frame.len > 125
+                _ws_protocol_error(ws, "invalid control frame (fragmented or oversized)")
+                break
+            end
+        elif op != WebSocketOpCode.Continuation and op != WebSocketOpCode.Text and op != WebSocketOpCode.Binary
+            _ws_protocol_error(ws, "unknown opcode " + str(op))
+            break
+        end
+
+        # ── RFC 6455 §5.1/§5.3: masking rules ──
+        # Frames from the client MUST be masked; frames from the server MUST NOT be.
+        if ws.is_server == true
+            if frame.masked == false
+                _ws_protocol_error(ws, "client frame not masked")
+                break
+            end
+        else
+            if frame.masked == true
+                _ws_protocol_error(ws, "server frame must not be masked")
+                break
+            end
+        end
+
+        # ── RFC 6455 §5.4: message fragmentation ──
+        if op == WebSocketOpCode.Continuation
+            if ws.frag_opcode < 0
+                _ws_protocol_error(ws, "unexpected continuation frame")
+                break
+            end
+            ws.frag_buffer += frame.payload
+            if frame.fin == true
+                let fcb = ws.on_message_cb
+                if fcb is not null
+                    let fis_bin = 0
+                    if ws.frag_opcode == WebSocketOpCode.Binary
+                        fis_bin = 1
+                    end
+                    fcb(ws, ws.frag_buffer, fis_bin)
+                end
+                ws.frag_opcode = -1
+                ws.frag_buffer = ""
+            end
+        elif op == WebSocketOpCode.Text or op == WebSocketOpCode.Binary
+            if ws.frag_opcode >= 0
+                _ws_protocol_error(ws, "new message started before fragmented message completed")
+                break
+            end
+            let is_bin = 0
+            if op == WebSocketOpCode.Binary
+                is_bin = 1
+            end
+            if frame.fin == true
+                let cb = ws.on_message_cb
+                if cb is not null
+                    cb(ws, frame.payload, is_bin)
+                end
+            else
+                ws.frag_opcode = op
+                ws.frag_buffer = frame.payload
+            end
+        else
+            # Process control frame based on OpCode
+            when op
+                is WebSocketOpCode.Ping then
+                    # Automatic RFC 6455 Ping-Pong reply
+                    ws_pong(ws, frame.payload)
+                    let cb = ws.on_ping_cb
+                    if cb is not null
+                        cb(ws, frame.payload)
+                    end
+                is WebSocketOpCode.Pong then
+                    let cb = ws.on_pong_cb
+                    if cb is not null
+                        cb(ws, frame.payload)
+                    end
+                is WebSocketOpCode.Close then
+                    let code = 1000
+                    let reason = ""
+                    if frame.len >= 2
+                        let b0 = ord(char_at(frame.payload, 0))
+                        let b1 = ord(char_at(frame.payload, 1))
+                        code = bit_or(bit_shl(b0, 8), b1)
+                        if frame.len > 2
+                            reason = substring(frame.payload, 2, frame.len - 2)
+                        end
+                    end
+                    ws_close(ws, code, reason)
+                    break
+            end
         end
     end
 

@@ -12,7 +12,7 @@ Production-ready HTTP client, server, router, compression, and middleware toolki
 ## 🌟 Features
 
 - ⚡ **High Performance & Reactive I/O**: Fast protocol parsing and routing. Seamlessly binds to `event::EventLoop` for non-blocking reactive concurrency (`reactive_server`), handling thousands of concurrent connections with zero thread overhead.
-- 🔌 **RFC 6455 WebSockets**: Full-duplex WebSocket server and client connections. Automatic handshake negotiation (`101 Switching Protocols`), RFC test-vector verified framing (text, binary, ping, pong, close), and callback-driven protocol drivers (`ws_on_message`, `ws_send`, etc.).
+- 🔌 **RFC 6455 WebSockets**: Full-duplex WebSocket server and client connections. Automatic handshake negotiation (`101 Switching Protocols`), RFC test-vector verified framing (text, binary, ping, pong, close), fragmented-message reassembly with interleaved control frames, protocol-error fails (1002), and callback-driven protocol drivers (`ws_on_message`, `ws_send`, etc.).
 - 🗜️ **Web Compression Toolkit**: Native integration with `compress` supporting **Brotli (`br`)**, **Zstandard (`zstd`)**, **Gzip (`gzip`)**, and **Deflate (`deflate`)**. Automatic `Accept-Encoding` negotiation, server response compression middleware, pre-compressed static asset serving (`.br` and `.gz`), and client decompression.
 - 🌐 **Full HTTP Client**: Supports GET, POST, PUT, DELETE, PATCH, HEAD, and OPTIONS with custom headers, query params, timeout handling, and automatic redirect following.
 - 🔒 **Native HTTPS**: Real TLS 1.2 via `alya-lang/tls` (RSA key exchange, certificate verification, binary-safe bodies) — no subprocess, no shell, no temp files. Verified live against OpenSSL and Python TLS servers.
@@ -278,6 +278,19 @@ main()
 | `ws_on_close(ws, callback)` | `ws: WebSocketConnection, cb: fn(ws, code, reason)` | Registers connection close callback |
 | `ws_on_ping(ws, callback)` | `ws: WebSocketConnection, cb: fn(ws, data)` | Registers incoming ping callback |
 | `ws_on_pong(ws, callback)` | `ws: WebSocketConnection, cb: fn(ws, data)` | Registers incoming pong callback |
+| `ws_on_error(ws, callback)` | `ws: WebSocketConnection, cb: fn(ws, reason)` | Registers protocol-error callback (1002 fail) |
+| `ws_encode_text_start(text, mask, key)` | `text: string, mask: int, key` | First fragment of a fragmented text message |
+| `ws_encode_binary_start(data, mask, key)` | `data, mask: int, key` | First fragment of a fragmented binary message |
+| `ws_encode_continuation(data, is_final, mask, key)` | `data: string, is_final: int, mask: int, key` | Continuation fragment; reassembled on receipt |
+
+> [!NOTE]
+> **Fragmentation & NUL bytes:** `ws_feed` reassembles fragmented messages and interleaves
+> control frames per RFC 6455 §5.4, and fails the connection with code 1002 on protocol
+> violations (unknown opcode, fragmented/oversized control frame, bad masking). One platform
+> limit applies: Alya strings cannot hold NUL bytes, so frames whose wire form contains `0x00`
+> (non-final continuations, 126–255 byte lengths, masked payload bytes XORing to zero) cannot
+> round-trip through the string-based wire API. A bytes-based wire over `std/net`
+> `tcp_send_bytes`/`tcp_recv_bytes` would lift this.
 
 ---
 

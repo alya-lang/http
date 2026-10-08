@@ -1,0 +1,199 @@
+## Test WebSocket Fragmentation & Protocol Validation (RFC 6455 §5)
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+import "std/test"
+import "../src/websocket/frame.alya"
+import "../src/websocket/connection.alya"
+
+struct MockStream
+    written
+    closed
+end
+
+function mock_write(stream, data)
+    stream.written += data
+    return true
+end
+
+function mock_close(stream)
+    stream.closed = true
+    return true
+end
+
+struct FragStore
+    messages
+    binaries
+    pings
+    errors
+    closed_code
+    closed_reason
+end
+
+function frag_msg(conn, msg, is_bin)
+    let s = conn.data
+    if is_bin == true
+        push(s.binaries, msg)
+    else
+        push(s.messages, msg)
+    end
+end
+
+function frag_ping(conn, data)
+    let s = conn.data
+    push(s.pings, data)
+end
+
+function frag_err(conn, reason)
+    let s = conn.data
+    push(s.errors, reason)
+end
+
+function frag_close(conn, code, reason)
+    let s = conn.data
+    s.closed_code = code
+    s.closed_reason = reason
+end
+
+function frag_case(is_server: int = 1)
+    let mock = MockStream {
+        written: "",
+        closed: 0
+    }
+    let ws = ws_connection_new(mock, is_server, mock_write, mock_close)
+    let store = FragStore {
+        messages: [],
+        binaries: [],
+        pings: [],
+        errors: [],
+        closed_code: 0,
+        closed_reason: ""
+    }
+    ws.data = store
+    ws_on_message(ws, frag_msg)
+    ws_on_ping(ws, frag_ping)
+    ws_on_error(ws, frag_err)
+    ws_on_close(ws, frag_close)
+    return [ws, mock, store]
+end
+
+function close_code_on_wire(wire)
+    let parsed = ws_frame_parse(wire, 0)
+    let f = parsed[0]
+    if f is null
+        return -1
+    end
+    if f.opcode != WebSocketOpCode.Close or f.len < 2
+        return -1
+    end
+    let b0 = ord(char_at(f.payload, 0))
+    let b1 = ord(char_at(f.payload, 1))
+    return bit_or(bit_shl(b0, 8), b1)
+end
+
+function main()
+    test_suite("WebSocket Fragmentation & Protocol Tests")
+    let r = runner_new()
+    let key = [1, 2, 3, 4]
+
+    # 1. Fragmented text reassembles into a single message.
+    # NOTE: only 2-fragment messages are wire-representable: Alya strings
+    # cannot hold NUL bytes (len(chr(0)) == 0), so a non-final continuation
+    # frame (b0 = 0x00) cannot round-trip. The reassembly path below is the
+    # same code that handles middle fragments; a bytes-based wire (using
+    # std/net tcp_send_bytes) would lift this limitation.
+    let c1 = frag_case()
+    let ws1 = c1[0]
+    ws_feed(ws1, ws_encode_text_start("Hello, ", 1, key))
+    runner_assert_eq(r, len(c1[2].messages), 0, "no message before final fragment")
+    runner_assert_eq(r, ws1.frag_opcode, 1, "fragmentation in progress (text)")
+    ws_feed(ws1, ws_encode_continuation("fragmented!", 1, 1, key))
+    runner_assert_eq(r, len(c1[2].messages), 1, "fragments reassemble into one message")
+    runner_assert_str_eq(r, c1[2].messages[0], "Hello, fragmented!", "reassembled content matches")
+    runner_assert_eq(r, ws1.frag_opcode, -1, "fragment state resets after final")
+    runner_assert_eq(r, ws1.state, WebSocketState.Open, "connection stays open")
+
+    # 2. Ping interleaved with fragments: pong reply + reassembly intact
+    let c2 = frag_case()
+    let ws2 = c2[0]
+    ws_feed(ws2, ws_encode_text_start("AB", 1, key))
+    ws_feed(ws2, ws_encode_ping("hb", 1, key))
+    runner_assert_eq(r, len(c2[2].pings), 1, "interleaved ping fires callback")
+    let pong2 = ws_frame_parse(c2[1].written, 0)[0]
+    runner_assert_eq(r, pong2.is_pong(), 1, "pong auto-reply sent during fragmentation")
+    ws_feed(ws2, ws_encode_continuation("CD", 1, 1, key))
+    runner_assert_str_eq(r, c2[2].messages[0], "ABCD", "message reassembles across ping")
+
+    # 3. Fragmented binary keeps binary flag
+    let c3 = frag_case()
+    ws_feed(c3[0], ws_encode_binary_start("010", 1, key))
+    ws_feed(c3[0], ws_encode_continuation("101", 1, 1, key))
+    runner_assert_eq(r, len(c3[2].binaries), 1, "fragmented binary delivered as binary")
+    runner_assert_str_eq(r, c3[2].binaries[0], "010101", "binary fragments concatenate")
+
+    # 4. Lone continuation without an open fragment -> 1002 + error
+    let c4 = frag_case()
+    ws_feed(c4[0], ws_encode_continuation("orphan", 1, 1, key))
+    runner_assert_eq(r, len(c4[2].errors), 1, "unexpected continuation raises error")
+    runner_assert_eq(r, c4[0].state, WebSocketState.Closed, "connection failed on stray continuation")
+    runner_assert_eq(r, c4[2].closed_code, 1002, "protocol-error close code in callback")
+    runner_assert_eq(r, close_code_on_wire(c4[1].written), 1002, "1002 close frame sent on wire")
+
+    # 5. Fragmented ping (FIN = 0) is a protocol error
+    let c5 = frag_case()
+    ws_feed(c5[0], ws_frame_encode(WebSocketOpCode.Ping, "x", 0, 1, key))
+    runner_assert_eq(r, c5[0].state, WebSocketState.Closed, "fragmented control frame fails connection")
+    runner_assert_eq(r, c5[2].closed_code, 1002, "control fragmentation closes with 1002")
+
+    # 6. Oversized control payload is a protocol error.
+    # NOTE: 300 bytes (not 126) because lengths 126-255 need a NUL high
+    # length byte (0x00, len), which Alya strings cannot hold.
+    let big = ""
+    let i = 0
+    while i < 300
+        big += "x"
+        i += 1
+    end
+    let c6 = frag_case()
+    ws_feed(c6[0], ws_encode_ping(big, 1, key))
+    runner_assert_eq(r, c6[0].state, WebSocketState.Closed, "oversized control frame fails connection")
+    runner_assert_eq(r, c6[2].closed_code, 1002, "oversized control closes with 1002")
+
+    # 7. Unmasked client frame against a server connection is rejected
+    let c7 = frag_case()
+    ws_feed(c7[0], ws_encode_text("plain", 0))
+    runner_assert_eq(r, c7[0].state, WebSocketState.Closed, "unmasked client frame fails connection")
+    runner_assert_eq(r, len(c7[2].messages), 0, "unmasked frame never delivered")
+    runner_assert_eq(r, c7[2].closed_code, 1002, "missing mask closes with 1002")
+
+    # 8. Masked server frame against a client connection is rejected
+    let c8 = frag_case(0)
+    ws_feed(c8[0], ws_encode_text("from-server", 1, key))
+    runner_assert_eq(r, c8[0].state, WebSocketState.Closed, "masked server frame fails client connection")
+    runner_assert_eq(r, c8[2].closed_code, 1002, "server mask closes with 1002")
+
+    # 9. Unmasked server frame against a client connection works
+    let c9 = frag_case(0)
+    ws_feed(c9[0], ws_encode_text("hello-client", 0))
+    runner_assert_eq(r, len(c9[2].messages), 1, "valid server frame delivered to client")
+    runner_assert_str_eq(r, c9[2].messages[0], "hello-client", "client message content matches")
+
+    # 10. New data frame while fragmented is a protocol error
+    let c10 = frag_case()
+    ws_feed(c10[0], ws_encode_text_start("half", 1, key))
+    ws_feed(c10[0], ws_encode_text("intruder", 1, key))
+    runner_assert_eq(r, c10[0].state, WebSocketState.Closed, "interleaved message fails connection")
+    runner_assert_eq(r, len(c10[2].messages), 0, "interrupted fragment never delivered")
+    runner_assert_eq(r, c10[2].closed_code, 1002, "interleaved message closes with 1002")
+
+    # 11. Unknown opcode is a protocol error
+    let c11 = frag_case()
+    ws_feed(c11[0], ws_frame_encode(5, "??", 1, 1, key))
+    runner_assert_eq(r, c11[0].state, WebSocketState.Closed, "unknown opcode fails connection")
+    runner_assert_eq(r, c11[2].closed_code, 1002, "unknown opcode closes with 1002")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

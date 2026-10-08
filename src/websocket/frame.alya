@@ -275,6 +275,22 @@ pub function ws_encode_pong(data: string = "", mask: int = 0, mask_key = null)
     return ws_frame_encode(WebSocketOpCode.Pong, data, 1, mask, mask_key)
 end
 
+## Encodes a continuation fragment (OpCode 0) for a fragmented message.
+## Middle fragments use is_final = 0; the last fragment uses is_final = 1.
+pub function ws_encode_continuation(data: string = "", is_final: int = 0, mask: int = 0, mask_key = null)
+    return ws_frame_encode(WebSocketOpCode.Continuation, data, is_final, mask, mask_key)
+end
+
+## Encodes the first fragment of a fragmented text message (OpCode 1, FIN = 0).
+pub function ws_encode_text_start(text: string, mask: int = 0, mask_key = null)
+    return ws_frame_encode(WebSocketOpCode.Text, text, 0, mask, mask_key)
+end
+
+## Encodes the first fragment of a fragmented binary message (OpCode 2, FIN = 0).
+pub function ws_encode_binary_start(data, mask: int = 0, mask_key = null)
+    return ws_frame_encode(WebSocketOpCode.Binary, data, 0, mask, mask_key)
+end
+
 # ═══════════════════════════════════════════════════════════════
 # Frame Deserialization / Streaming Parser
 # ═══════════════════════════════════════════════════════════════
