@@ -66,8 +66,8 @@ http/
 ├── examples/
 │   ├── compression_demo.alya # Dedicated HTTP compression showcase
 │   └── demo.alya           # Comprehensive usage demo
-├── tests/                  # 22 test suites (21 active, 1 parked — see .alyatest)
-│   ├── test_bytes.alya         # parked: blocked by alya-lang/alya#132
+├── tests/                  # 22 test suites (100% passing)
+│   ├── test_bytes.alya
 │   ├── test_client.alya
 │   ├── test_compression.alya
 │   ├── test_context.alya
@@ -337,9 +337,6 @@ main()
 | `ws_send_bytes(ws, data)` | `ws: WebSocketConnection, data: array` | Sends a binary frame with bytes |
 
 > [!NOTE]
-> **Compiler-blocked e2e:** the bytes transport code is complete, but any binary mixing
-> array construction with larger binaries misreads on alya 0.0.20 (see alya-lang/alya#132).
-> `tests/test_bytes.alya` is parked in `.alyatest` exclude until the fix lands; enable it then.
 > Reactive (event-loop) paths stay text-only — the `event` package has no byte transport yet.
 
 ---

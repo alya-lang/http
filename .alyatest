@@ -5,9 +5,7 @@
 [test]
 # Paths, directories, or patterns to exclude from `alya test` discovery:
 # exclude = ["slow"]
-# test_bytes is parked until alya-lang/alya#132 is fixed: array values read
-# back corrupt (or crash) in larger binaries on 0.0.20.
-exclude = ["tests/test_bytes.alya"]
+exclude = []
 
 [bench]
 # Paths, directories, or patterns to exclude from `alya bench` discovery:
