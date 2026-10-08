@@ -1,0 +1,129 @@
+## Test Multipart/form-data Parser, Serializer, and File Upload Toolkit
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "std/test"
+import "../src/types.alya"
+import "../src/lib.alya" as http
+
+function main()
+    test_suite("Multipart Form & File Upload Tests")
+    let r = runner_new()
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECTION 1: Boundary Extraction
+    # ═══════════════════════════════════════════════════════════════
+    say "--- SECTION 1 (Boundary Extraction) ---"
+    let ct1 = "multipart/form-data; boundary=----WebKitFormBoundaryXYZ123"
+    let b1 = http::multipart_boundary(ct1)
+    runner_assert_str_eq(r, b1, "----WebKitFormBoundaryXYZ123", "extract unquoted boundary")
+
+    let ct2 = "multipart/form-data; boundary=\"custom_quoted_boundary_999\""
+    let b2 = http::multipart_boundary(ct2)
+    runner_assert_str_eq(r, b2, "custom_quoted_boundary_999", "extract quoted boundary")
+
+    let ct3 = "multipart/form-data; charset=utf-8; boundary=mixed_boundary; extra=true"
+    let b3 = http::multipart_boundary(ct3)
+    runner_assert_str_eq(r, b3, "mixed_boundary", "extract boundary with surrounding parameters")
+
+    let ct_inv = "application/json; charset=utf-8"
+    let b_inv = http::multipart_boundary(ct_inv)
+    runner_assert_str_eq(r, b_inv, "", "non-multipart header yields empty boundary")
+
+    let b_type = http::multipart_content_type("my_boundary")
+    runner_assert_str_eq(r, b_type, "multipart/form-data; boundary=my_boundary", "constructs valid Content-Type")
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECTION 2: Multipart Encoding & Parsing Roundtrip
+    # ═══════════════════════════════════════════════════════════════
+    say "--- SECTION 2 (Encoding and Parsing) ---"
+    let fields = {
+        "username": "alya_architect",
+        "role": "core_maintainer"
+    }
+
+    let f1 = http::uploaded_file("avatar", "profile.png", "image/png", "BINARY_PNG_PAYLOAD_ABC")
+    let f2 = http::uploaded_file("notes", "release.txt", "text/plain", "Alya 0.1.0 release notes content.")
+    let files = [f1, f2]
+
+    let test_boundary = "----AlyaTestBoundary42"
+    let wire = http::multipart_encode(fields, files, test_boundary)
+
+    runner_assert(r, len(wire) > 0, "multipart wire string encoded")
+    runner_assert_eq(r, index_of(wire, "--" + test_boundary) >= 0, 1, "contains boundary delimiter")
+    runner_assert_eq(r, index_of(wire, "--" + test_boundary + "--") >= 0, 1, "contains closing boundary delimiter")
+
+    # Parse back the encoded wire string
+    let parsed: MultipartData = http::multipart(wire, test_boundary)
+    runner_assert(r, parsed is not null, "parsed multipart data not null")
+
+    # Verify form fields
+    runner_assert_str_eq(r, parsed.get_field("username"), "alya_architect", "parsed field username matches")
+    runner_assert_str_eq(r, parsed.get_field("role"), "core_maintainer", "parsed field role matches")
+    runner_assert_str_eq(r, parsed.get_field("non_existent", "fallback"), "fallback", "missing field returns default")
+
+    # Verify uploaded files
+    runner_assert_eq(r, len(parsed.file_list), 2, "total uploaded file count is 2")
+
+    let up_f1: HttpUploadedFile = parsed.get_file("avatar")
+    runner_assert(r, up_f1 is not null, "file avatar exists")
+    runner_assert_str_eq(r, up_f1.name, "avatar", "file form name matches")
+    runner_assert_str_eq(r, up_f1.filename, "profile.png", "client filename matches")
+    runner_assert_str_eq(r, up_f1.content_type, "image/png", "content-type matches")
+    runner_assert_str_eq(r, up_f1.data, "BINARY_PNG_PAYLOAD_ABC", "file binary content matches")
+    runner_assert_eq(r, up_f1.size, len("BINARY_PNG_PAYLOAD_ABC"), "file size matches")
+
+    let up_f2: HttpUploadedFile = parsed.get_file("notes")
+    runner_assert(r, up_f2 is not null, "file notes exists")
+    runner_assert_str_eq(r, up_f2.filename, "release.txt", "notes filename matches")
+    runner_assert_str_eq(r, up_f2.data, "Alya 0.1.0 release notes content.", "notes data matches")
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECTION 3: Uploaded File Disk Persistence (save_to)
+    # ═══════════════════════════════════════════════════════════════
+    say "--- SECTION 3 (File Save) ---"
+    let tmp_dest = "temp_uploaded_notes.txt"
+    let saved = up_f2.save_to(tmp_dest)
+    runner_assert_eq(r, saved, 1, "file saved to disk successfully")
+
+    let disk_content = read_file(tmp_dest)
+    runner_assert_str_eq(r, disk_content, "Alya 0.1.0 release notes content.", "persisted content matches original upload")
+
+    # Cleanup temporary test file
+    remove_file(tmp_dest)
+
+    # ═══════════════════════════════════════════════════════════════
+    # SECTION 4: HttpContext Integration
+    # ═══════════════════════════════════════════════════════════════
+    say "--- SECTION 4 (HttpContext Integration) ---"
+    let req_headers = {
+        "content-type": "multipart/form-data; boundary=" + test_boundary
+    }
+    let req = http::request("POST", "/upload", "", req_headers, wire)
+    let ctx = http::ctx(req)
+
+    # Direct helper access
+    let ctx_mp: MultipartData = http::ctx_multipart(ctx)
+    runner_assert(r, ctx_mp is not null, "ctx_multipart resolved data")
+    runner_assert_str_eq(r, http::ctx_form(ctx, "username"), "alya_architect", "ctx_form retrieves form field")
+    runner_assert_str_eq(r, http::ctx_form(ctx, "role"), "core_maintainer", "ctx_form retrieves second field")
+
+    let ctx_avatar: HttpUploadedFile = http::ctx_file(ctx, "avatar")
+    runner_assert(r, ctx_avatar is not null, "ctx_file finds avatar")
+    runner_assert_str_eq(r, ctx_avatar.filename, "profile.png", "ctx_file client filename")
+
+    let all_files = http::ctx_files(ctx)
+    runner_assert_eq(r, len(all_files), 2, "ctx_files returns all files")
+
+    # Object-oriented struct method access
+    runner_assert_str_eq(r, ctx.form("username"), "alya_architect", "ctx.form struct method works")
+    let ctx_notes: HttpUploadedFile = ctx.file("notes")
+    runner_assert(r, ctx_notes is not null, "ctx.file struct method finds file")
+    runner_assert_str_eq(r, ctx_notes.filename, "release.txt", "ctx.file struct method filename matches")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

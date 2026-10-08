@@ -6,6 +6,7 @@ import "./core/status.alya"
 import "./core/headers.alya"
 import "./core/cookies.alya"
 import "./core/protocol.alya"
+import "./core/multipart.alya"
 import "./router/route.alya"
 import "./router/router.alya"
 import "./router/group.alya"
@@ -298,4 +299,24 @@ end
 @cfg(feature = "event")
 pub function reactive_ws(loop, url_str: string, on_open = null, on_message = null, on_error = null, on_close = null)
     return client_reactive_ws_connect(loop, url_str, on_open, on_message, on_error, on_close)
+end
+
+## Creates an HttpUploadedFile instance.
+pub function uploaded_file(name: string, filename: string, content_type: string = "application/octet-stream", data: string = "") -> HttpUploadedFile
+    return uploaded_file_create(name, filename, content_type, data)
+end
+
+## Parses a raw multipart/form-data payload string using the given boundary.
+pub function multipart(body: string, boundary: string) -> MultipartData
+    return multipart_parse(body, boundary)
+end
+
+## Extracts the boundary string from a multipart/form-data Content-Type header.
+pub function multipart_boundary(content_type_header: string) -> string
+    return multipart_extract_boundary(content_type_header)
+end
+
+## Constructs a standard Content-Type header value for a multipart request.
+pub function multipart_content_type(boundary: string) -> string
+    return multipart_build_content_type(boundary)
 end

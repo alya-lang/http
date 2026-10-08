@@ -204,6 +204,34 @@ pub struct HttpClient
     tls_verify: int
 end
 
+## Represents an uploaded file in a multipart/form-data request.
+##
+## ### Fields
+## - `name`: Form field name string.
+## - `filename`: Client filename string.
+## - `content_type`: Media type string.
+## - `data`: Raw file payload content.
+## - `size`: Byte count integer.
+pub struct HttpUploadedFile
+    name: string
+    filename: string
+    content_type: string
+    data: string
+    size: int
+end
+
+## Represents parsed multipart/form-data payload.
+##
+## ### Fields
+## - `fields`: Form field values map.
+## - `files`: Uploaded files map keyed by field name.
+## - `file_list`: Array of all HttpUploadedFile items.
+pub struct MultipartData
+    fields: map
+    files: map
+    file_list: array
+end
+
 ## Factory for creating an HttpCookie instance.
 ##
 ## ### Parameters

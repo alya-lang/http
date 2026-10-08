@@ -9,6 +9,7 @@ import "../types.alya"
 import "../core/status.alya"
 import "../core/headers.alya"
 import "../core/cookies.alya"
+import "../core/multipart.alya"
 
 ## Creates a new HttpContext instance
 pub function ctx_new(req: HttpRequest, res: HttpResponse = null, client_sock: int = -1)
@@ -148,6 +149,89 @@ pub function ctx_body(ctx: HttpContext)
     return req.body
 end
 
+## Retrieves parsed multipart form data from the request, or null if not multipart
+pub function ctx_multipart(ctx: HttpContext)
+    if ctx is null or ctx.req is null
+        return null
+    end
+    if has(ctx.data, "_multipart_parsed")
+        return ctx.data["_multipart_parsed"]
+    end
+
+    let ct = ctx_get_header(ctx, "content-type", "")
+    if index_of(lower(ct), "multipart/form-data") < 0
+        return null
+    end
+
+    let boundary = multipart_extract_boundary(ct)
+    if boundary == ""
+        return null
+    end
+
+    let req: HttpRequest = ctx.req
+    let mp = multipart_parse(req.body, boundary)
+    ctx.data["_multipart_parsed"] = mp
+    return mp
+end
+
+## Retrieves a form field value by name (checks multipart first, then query/params)
+pub function ctx_form(ctx: HttpContext, name: string, default_val: string = "") -> string
+    if ctx is null or name is null or name == ""
+        return default_val
+    end
+
+    let mp: MultipartData = ctx_multipart(ctx)
+    if mp is not null
+        let fv = mp.get_field(name, "")
+        if fv != ""
+            return fv
+        end
+    end
+
+    return ctx_query(ctx, name, default_val)
+end
+
+## Retrieves an uploaded file by form field name
+pub function ctx_file(ctx: HttpContext, name: string)
+    if ctx is null or name is null or name == ""
+        return null
+    end
+
+    let mp: MultipartData = ctx_multipart(ctx)
+    if mp is null
+        return null
+    end
+
+    return mp.get_file(name)
+end
+
+## Retrieves all uploaded files, optionally filtered by field name
+pub function ctx_files(ctx: HttpContext, name: string = "") -> array
+    if ctx is null
+        return []
+    end
+
+    let mp: MultipartData = ctx_multipart(ctx)
+    if mp is null
+        return []
+    end
+
+    if name == ""
+        return mp.file_list
+    end
+
+    let result = []
+    let i = 0
+    while i < len(mp.file_list)
+        let f: HttpUploadedFile = mp.file_list[i]
+        if f.name == name
+            push(result, f)
+        end
+        i += 1
+    end
+    return result
+end
+
 ## Sends a plain text response
 pub function ctx_text(ctx: HttpContext, text_content: string, status_code: int = 200)
     ctx_status(ctx, status_code)
@@ -210,4 +294,24 @@ pub function ctx_abort(ctx: HttpContext)
         ctx.aborted = 1
     end
     return ctx
+end
+
+## Struct method for HttpContext.multipart
+pub function HttpContext.multipart(self: HttpContext)
+    return ctx_multipart(self)
+end
+
+## Struct method for HttpContext.form
+pub function HttpContext.form(self: HttpContext, name: string, default_val: string = "") -> string
+    return ctx_form(self, name, default_val)
+end
+
+## Struct method for HttpContext.file
+pub function HttpContext.file(self: HttpContext, name: string)
+    return ctx_file(self, name)
+end
+
+## Struct method for HttpContext.files
+pub function HttpContext.files(self: HttpContext, name: string = "") -> array
+    return ctx_files(self, name)
 end

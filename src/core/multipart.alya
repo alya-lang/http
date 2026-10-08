@@ -1,0 +1,272 @@
+## Multipart/form-data parser and encoder for Alya.
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "../types.alya"
+import "./headers.alya"
+import "./protocol.alya"
+
+## Factory for creating an HttpUploadedFile instance.
+pub function uploaded_file_create(name: string, filename: string, content_type: string = "application/octet-stream", data: string = "") -> HttpUploadedFile
+    return HttpUploadedFile {
+        name: name,
+        filename: filename,
+        content_type: content_type,
+        data: data,
+        size: len(data)
+    }
+end
+
+## Factory for creating a MultipartData instance.
+pub function multipart_data_create(fields = null, files = null, file_list = null) -> MultipartData
+    if fields is null
+        fields = {}
+    end
+    if files is null
+        files = {}
+    end
+    if file_list is null
+        file_list = []
+    end
+    return MultipartData {
+        fields: fields,
+        files: files,
+        file_list: file_list
+    }
+end
+
+## Saves the uploaded file content to the specified filesystem path.
+pub function HttpUploadedFile.save_to(self: HttpUploadedFile, target_path: string) -> bool
+    if self is null or target_path is null or target_path == ""
+        return false
+    end
+    let res = write_file(target_path, self.data)
+    return res != 0
+end
+
+## Gets a form field value by name.
+pub function MultipartData.get_field(self: MultipartData, name: string, default_val: string = "") -> string
+    if self is null or self.fields is null or name is null
+        return default_val
+    end
+    if has(self.fields, name)
+        return self.fields[name]
+    end
+    return default_val
+end
+
+## Gets an uploaded file by form field name.
+pub function MultipartData.get_file(self: MultipartData, name: string)
+    if self is null or self.files is null or name is null
+        return null
+    end
+    if has(self.files, name)
+        return self.files[name]
+    end
+    return null
+end
+
+## Extracts the boundary string from a multipart/form-data Content-Type header.
+pub function multipart_extract_boundary(content_type_header: string) -> string
+    if content_type_header is null or len(content_type_header) == 0
+        return ""
+    end
+
+    let lower_hdr = lower(content_type_header)
+    let b_idx = index_of(lower_hdr, "boundary=")
+    if b_idx < 0
+        return ""
+    end
+
+    let val_start = b_idx + 9
+    if val_start >= len(content_type_header)
+        return ""
+    end
+
+    let raw_val = substring(content_type_header, val_start, len(content_type_header) - val_start)
+    raw_val = trim(raw_val)
+
+    # Check for quotes around boundary
+    if len(raw_val) > 0 and char_at(raw_val, 0) == "\""
+        let q_end = index_of(substring(raw_val, 1, len(raw_val) - 1), "\"")
+        if q_end >= 0
+            return substring(raw_val, 1, q_end)
+        else
+            return substring(raw_val, 1, len(raw_val) - 1)
+        end
+    end
+
+    # Otherwise read until semicolon or whitespace
+    let semi_idx = index_of(raw_val, ";")
+    if semi_idx >= 0
+        return trim(substring(raw_val, 0, semi_idx))
+    end
+
+    return raw_val
+end
+
+## Constructs a standard Content-Type header value for a multipart request.
+pub function multipart_build_content_type(boundary: string) -> string
+    return "multipart/form-data; boundary=" + boundary
+end
+
+## Parses a raw multipart/form-data payload string using the given boundary.
+pub function multipart_parse(body: string, boundary: string) -> MultipartData
+    let fields = {}
+    let files = {}
+    let file_list = []
+
+    if body is null or len(body) == 0 or boundary is null or len(boundary) == 0
+        return multipart_data_create(fields, files, file_list)
+    end
+
+    let delim = "--" + boundary
+    let raw_parts = split(body, delim)
+
+    let idx = 1
+    while idx < len(raw_parts)
+        let part = raw_parts[idx]
+
+        # If part starts with "--", this is the closing boundary marker (--<boundary>--)
+        if len(part) >= 2 and substring(part, 0, 2) == "--"
+            break
+        end
+
+        # Strip leading CRLF or LF from part
+        if len(part) >= 2 and substring(part, 0, 2) == "\r\n"
+            part = substring(part, 2, len(part) - 2)
+        elif len(part) >= 1 and substring(part, 0, 1) == "\n"
+            part = substring(part, 1, len(part) - 1)
+        end
+
+        # Find header/body boundary (\r\n\r\n or \n\n)
+        let head_end = _proto_find(part, "\r\n\r\n", 0)
+        let delim_len = 4
+        if head_end < 0
+            head_end = _proto_find(part, "\n\n", 0)
+            delim_len = 2
+        end
+
+        if head_end >= 0
+            let header_str = substring(part, 0, head_end)
+            let body_content = ""
+            let b_start = head_end + delim_len
+            if b_start < len(part)
+                body_content = substring(part, b_start, len(part) - b_start)
+            end
+
+            # Strip trailing CRLF or LF before next boundary delimiter
+            if len(body_content) >= 2 and substring(body_content, len(body_content) - 2, 2) == "\r\n"
+                body_content = substring(body_content, 0, len(body_content) - 2)
+            elif len(body_content) >= 1 and substring(body_content, len(body_content) - 1, 1) == "\n"
+                body_content = substring(body_content, 0, len(body_content) - 1)
+            end
+
+            # Parse headers for this part
+            let lines = split(header_str, "\n")
+            let part_headers = {}
+            let li = 0
+            while li < len(lines)
+                let line = trim(lines[li])
+                let colon = _proto_find(line, ":", 0)
+                if colon > 0
+                    let hkey = lower(trim(substring(line, 0, colon)))
+                    let hval = trim(substring(line, colon + 1, len(line) - (colon + 1)))
+                    part_headers[hkey] = hval
+                end
+                li += 1
+            end
+
+            let cd = header_get(part_headers, "content-disposition", "")
+            if cd != "" and index_of(lower(cd), "form-data") >= 0
+                # Extract field name
+                let field_name = ""
+                let name_pos = index_of(cd, "name=\"")
+                if name_pos >= 0
+                    let n_from = name_pos + 6
+                    let n_sub = substring(cd, n_from, len(cd) - n_from)
+                    let n_end = index_of(n_sub, "\"")
+                    if n_end >= 0
+                        field_name = substring(n_sub, 0, n_end)
+                    else
+                        field_name = n_sub
+                    end
+                end
+
+                # Extract optional filename
+                let filename = ""
+                let fn_pos = index_of(cd, "filename=\"")
+                if fn_pos >= 0
+                    let f_from = fn_pos + 10
+                    let f_sub = substring(cd, f_from, len(cd) - f_from)
+                    let f_end = index_of(f_sub, "\"")
+                    if f_end >= 0
+                        filename = substring(f_sub, 0, f_end)
+                    else
+                        filename = f_sub
+                    end
+                end
+
+                let ctype = header_get(part_headers, "content-type", "application/octet-stream")
+
+                if filename != ""
+                    let up_file = HttpUploadedFile {
+                        name: field_name,
+                        filename: filename,
+                        content_type: ctype,
+                        data: body_content,
+                        size: len(body_content)
+                    }
+                    files[field_name] = up_file
+                    push(file_list, up_file)
+                else
+                    fields[field_name] = body_content
+                end
+            end
+        end
+
+        idx += 1
+    end
+
+    return multipart_data_create(fields, files, file_list)
+end
+
+## Encodes form fields and uploaded files into a multipart/form-data wire string.
+pub function multipart_encode(fields = null, files = null, boundary: string = "") -> string
+    if boundary == ""
+        boundary = "----AlyaFormBoundary" + str(clock_ms())
+    end
+
+    let wire = ""
+
+    if fields is not null
+        let ks = keys(fields)
+        let i = 0
+        while i < len(ks)
+            let k = ks[i]
+            let v = fields[k]
+            wire += "--" + boundary + "\r\n"
+            wire += "Content-Disposition: form-data; name=\"" + str(k) + "\"\r\n\r\n"
+            wire += str(v) + "\r\n"
+            i += 1
+        end
+    end
+
+    if files is not null
+        let fi = 0
+        while fi < len(files)
+            let f: HttpUploadedFile = files[fi]
+            wire += "--" + boundary + "\r\n"
+            wire += "Content-Disposition: form-data; name=\"" + f.name + "\"; filename=\"" + f.filename + "\"\r\n"
+            let ct = f.content_type
+            if ct == ""
+                ct = "application/octet-stream"
+            end
+            wire += "Content-Type: " + ct + "\r\n\r\n"
+            wire += f.data + "\r\n"
+            fi += 1
+        end
+    end
+
+    wire += "--" + boundary + "--\r\n"
+    return wire
+end
