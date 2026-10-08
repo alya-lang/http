@@ -66,7 +66,7 @@ http/
 ├── examples/
 │   ├── compression_demo.alya # Dedicated HTTP compression showcase
 │   └── demo.alya           # Comprehensive usage demo
-├── tests/                  # 22 test suites (100% passing)
+├── tests/                  # 23 test suites (100% passing)
 │   ├── test_bytes.alya
 │   ├── test_client.alya
 │   ├── test_compression.alya
@@ -80,6 +80,7 @@ http/
 │   ├── test_reactive_client.alya
 │   ├── test_reactive_server.alya
 │   ├── test_reactive_sse.alya
+│   ├── test_reactive_ws_bytes.alya
 │   ├── test_router.alya
 │   ├── test_server.alya
 │   ├── test_server_tls.alya
@@ -316,6 +317,7 @@ main()
 | `chunk_decode(raw)` | `raw: string` | Decodes a chunked payload back to raw content |
 | `reactive_sse(loop, url, headers, on_event, on_error, on_close)` | `loop: EventLoop, ...` | Subscribes to an SSE endpoint over the event loop |
 | `reactive_sse_close(client)` | `client: ReactiveSseClient` | Closes an active reactive SSE subscription |
+| `reactive_ws_connect_bytes(loop, url, on_open, on_message, on_error, on_close)` | `loop: EventLoop, ...` | Binary-wire WS client; message callbacks receive byte arrays |
 
 ### Binary Body & Byte Frame API
 
@@ -337,7 +339,9 @@ main()
 | `ws_send_bytes(ws, data)` | `ws: WebSocketConnection, data: array` | Sends a binary frame with bytes |
 
 > [!NOTE]
-> Reactive (event-loop) paths stay text-only — the `event` package has no byte transport yet.
+> The reactive binary WS client needs the `event` package with byte transport
+> (`set_binary`, `write_bytes`, `on_data_bytes`, event v0.1.0 re-release or later).
+> The reactive *server* still serves text/upgrade flows only.
 
 ---
 

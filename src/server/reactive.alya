@@ -18,6 +18,11 @@ pub function _reactive_ws_write(s: TcpStream, data)
     return ev::tcp_stream_write(s, data)
 end
 
+## Internal byte-array writer for WebSocket over event::TcpStream (NUL-safe).
+pub function _reactive_ws_write_bytes(s: TcpStream, data)
+    return ev::tcp_stream_write_bytes(s, data)
+end
+
 ## Internal closer callback for WebSocket over event::TcpStream.
 pub function _reactive_ws_close(s: TcpStream)
     return ev::tcp_stream_close(s)

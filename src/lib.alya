@@ -302,6 +302,15 @@ pub function reactive_ws(loop, url_str: string, on_open = null, on_message = nul
     return client_reactive_ws_connect(loop, url_str, on_open, on_message, on_error, on_close)
 end
 
+## Connects asynchronously to a WebSocket endpoint with a binary wire.
+##
+## Message callbacks receive integer arrays (NUL-safe). Requires the `event`
+## feature (default-on) with byte transport.
+@cfg(feature = "event")
+pub function reactive_ws_connect_bytes(loop, url_str: string, on_open = null, on_message = null, on_error = null, on_close = null)
+    return client_reactive_ws_connect_bytes(loop, url_str, on_open, on_message, on_error, on_close)
+end
+
 ## Creates an HttpUploadedFile instance.
 pub function uploaded_file(name: string, filename: string, content_type: string = "application/octet-stream", data: string = "") -> HttpUploadedFile
     return uploaded_file_create(name, filename, content_type, data)

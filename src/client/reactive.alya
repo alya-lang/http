@@ -703,3 +703,216 @@ pub function client_reactive_sse_close(client: ReactiveSseClient)
         ev::tcp_stream_close(client.stream)
     end
 end
+
+## Represents the state of a reactive binary WebSocket client connection.
+pub struct ReactiveWsBytesState
+    stream
+    sec_key: string
+    buffer_bytes: array
+    handshake_complete: int
+    ws_conn
+    on_open_cb
+    on_message_cb
+    on_error_cb
+    on_close_cb
+end
+
+## Attaches the event-stream byte writer to a client WebSocket connection.
+function _ws_attach_bytes_writer(ws: WebSocketConnection)
+    ws.write_bytes_fn = _reactive_ws_write_bytes
+    return ws
+end
+
+## Callback invoked when byte-array data arrives on a reactive binary
+## WebSocket client stream. Mirrors the text handshake, then feeds frames
+## through the bytes wire path (NUL-safe).
+pub function _on_reactive_ws_bytes_data(stream, chunk)
+    if stream is null or chunk is null or len(chunk) == 0
+        return false
+    end
+    let state: ReactiveWsBytesState = stream.data
+    if state is null
+        return false
+    end
+
+    if state.handshake_complete == 1
+        if state.ws_conn is not null
+            let ws: WebSocketConnection = state.ws_conn
+            ws_feed_bytes(ws, chunk)
+        end
+        return true
+    end
+
+    let bi = 0
+    while bi < len(chunk)
+        state.buffer_bytes.push(chunk[bi])
+        bi += 1
+    end
+    let delim_idx = proto_find_bytes(state.buffer_bytes, [13, 10, 13, 10], 0)
+    if delim_idx < 0
+        return true
+    end
+
+    let header_bytes = bytes_slice(state.buffer_bytes, 0, delim_idx)
+    let rem_start = delim_idx + 4
+    let remainder = bytes_slice(state.buffer_bytes, rem_start, len(state.buffer_bytes) - rem_start)
+    state.buffer_bytes = []
+
+    let res: HttpResponse = http_parse_response(crypto::bytes_to_str(header_bytes) + "\r\n\r\n")
+    if res.status_code != 101
+        if state.on_error_cb is not null
+            let err_cb = state.on_error_cb
+            err_cb("WebSocket handshake rejected with status " + str(res.status_code))
+        end
+        ev::tcp_stream_close(stream)
+        return false
+    end
+
+    let expected_accept = ws_accept_key(state.sec_key)
+    let actual_accept = header_get(res.headers, "sec-websocket-accept", "")
+    if actual_accept != expected_accept
+        if state.on_error_cb is not null
+            let err_cb = state.on_error_cb
+            err_cb("Sec-WebSocket-Accept token mismatch: expected " + expected_accept + ", got " + actual_accept)
+        end
+        ev::tcp_stream_close(stream)
+        return false
+    end
+
+    # Handshake valid! Create client WebSocketConnection with is_server = 0
+    let ws: WebSocketConnection = ws_connection_from_stream(stream, 0)
+    _ws_attach_bytes_writer(ws)
+    state.ws_conn = ws
+    state.handshake_complete = 1
+
+    if state.on_message_cb is not null
+        ws_on_message(ws, state.on_message_cb)
+    end
+    if state.on_close_cb is not null
+        ws_on_close(ws, state.on_close_cb)
+    end
+
+    if state.on_open_cb is not null
+        let open_cb = state.on_open_cb
+        open_cb(ws)
+    end
+
+    if len(remainder) > 0
+        ws_feed_bytes(ws, remainder)
+    end
+
+    return true
+end
+
+## Callback invoked when a reactive binary WebSocket client stream closes.
+pub function _on_reactive_ws_bytes_close(stream)
+    if stream is null
+        return false
+    end
+    let state: ReactiveWsBytesState = stream.data
+    if state is null
+        return false
+    end
+
+    if state.handshake_complete == 0
+        if state.on_error_cb is not null
+            let err_cb = state.on_error_cb
+            err_cb("Connection closed before WebSocket handshake completed")
+        end
+        return false
+    end
+
+    if state.ws_conn is not null
+        let ws: WebSocketConnection = state.ws_conn
+        if ws.state != WebSocketState.Closed
+            ws.state = WebSocketState.Closed
+            let cb = ws.on_close_cb
+            if cb is not null
+                cb(ws, 1006, "Connection closed abruptly")
+            end
+        end
+    end
+    return true
+end
+
+## Connects asynchronously to a WebSocket endpoint with a binary wire.
+##
+## Identical handshake to `client_reactive_ws_connect`, but the stream runs
+## in binary mode: frames travel as byte arrays (NUL-safe) and message
+## callbacks receive integer arrays. Requires the `event` byte transport.
+pub function client_reactive_ws_connect_bytes(loop, url_str: string, on_open = null, on_message = null, on_error = null, on_close = null)
+    if loop is null or url_str is null or url_str == ""
+        if on_error is not null
+            on_error("Invalid loop or URL provided to client_reactive_ws_connect_bytes")
+        end
+        return null
+    end
+
+    let parsed = url_pkg::url_parse(url_str)
+    let host = parsed.host
+    let scheme = parsed.scheme
+    if host == "" or (scheme != "ws" and scheme != "http")
+        if on_error is not null
+            on_error("Invalid WebSocket URL (scheme must be ws:// or http://): " + url_str)
+        end
+        return null
+    end
+
+    let port_str = url_pkg::url_effective_port(parsed)
+    let port = 80
+    if len(port_str) > 0
+        port = to_int(port_str)
+    end
+
+    let path = parsed.path
+    if path == ""
+        path = "/"
+    end
+    let query = parsed.query
+    let full_path = path
+    if query != ""
+        full_path += "?" + query
+    end
+
+    let sec_key = _ws_client_generate_key()
+
+    let req_wire = "GET " + full_path + " HTTP/1.1\r\n"
+    req_wire += "Host: " + host
+    if port != 80 and port != 443
+        req_wire += ":" + str(port)
+    end
+    req_wire += "\r\n"
+    req_wire += "Upgrade: websocket\r\n"
+    req_wire += "Connection: Upgrade\r\n"
+    req_wire += "Sec-WebSocket-Key: " + sec_key + "\r\n"
+    req_wire += "Sec-WebSocket-Version: 13\r\n"
+    req_wire += "User-Agent: Alya-Http-Ws/0.1.0\r\n\r\n"
+
+    let stream = ev::tcp_client_connect(loop, host, port, null, null)
+    if stream is null
+        if on_error is not null
+            on_error("Failed to connect to " + host + ":" + str(port))
+        end
+        return null
+    end
+
+    let ws_state = ReactiveWsBytesState {
+        stream: stream,
+        sec_key: sec_key,
+        buffer_bytes: [],
+        handshake_complete: 0,
+        ws_conn: null,
+        on_open_cb: on_open,
+        on_message_cb: on_message,
+        on_error_cb: on_error,
+        on_close_cb: on_close
+    }
+
+    stream.data = ws_state
+    ev::tcp_stream_set_binary(stream, 1)
+    stream.on_data_bytes_cb = _on_reactive_ws_bytes_data
+    stream.on_close_cb = _on_reactive_ws_bytes_close
+
+    ev::tcp_stream_write(stream, req_wire)
+    return ws_state
+end
