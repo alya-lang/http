@@ -45,7 +45,7 @@ pub function client_set_tls_verify(client, verify: int)
 end
 
 ## Performs an HTTP request using raw TCP socket or HTTPS bridge
-pub function client_execute(client, method, url_str: string, extra_headers = null, body: string = "")
+pub function client_execute(client: HttpClient, method, url_str: string, extra_headers = null, body: string = "")
     let parsed = url_pkg::url_parse(url_str)
     let host = parsed.host
     let scheme = parsed.scheme

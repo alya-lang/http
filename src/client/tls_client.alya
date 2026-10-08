@@ -34,7 +34,7 @@ pub function https_build_request(method, host: string, path: string, req_headers
 end
 
 ## Performs one HTTPS request natively, following redirects when configured
-pub function https_execute(client, method, url_str: string, extra_headers = null, body: string = "")
+pub function https_execute(client: HttpClient, method, url_str: string, extra_headers = null, body: string = "")
     let parsed = url_pkg::url_parse(url_str)
     let host = parsed.host
     if host == ""
