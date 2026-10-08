@@ -14,7 +14,7 @@ pub function mw_format_log(method, path: string, status: int, latency_ms: int = 
 end
 
 ## Logs an HttpContext request and response lifecycle.
-pub function mw_log_context(ctx, latency_ms: int = -1)
+pub function mw_log_context(ctx: HttpContext, latency_ms: int = -1)
     if ctx is null or ctx.req is null
         return null
     end

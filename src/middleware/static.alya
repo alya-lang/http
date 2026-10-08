@@ -46,7 +46,7 @@ end
 
 ## Attempts to serve a static file for the current request.
 ## Returns 1 if file was found and served, 0 otherwise.
-pub function mw_serve_static(ctx, url_prefix: string, local_dir: string)
+pub function mw_serve_static(ctx: HttpContext, url_prefix: string, local_dir: string)
     if ctx is null or ctx.req is null
         return false
     end

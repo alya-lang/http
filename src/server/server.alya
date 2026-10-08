@@ -240,7 +240,7 @@ end
 
 # Processes common middlewares (CORS, static files) and matches route on HttpContext
 ## Returns the RouteMatch result
-pub function server_process(server, ctx)
+pub function server_process(server, ctx: HttpContext)
     if server is null or ctx is null
         return RouteMatch { found: 0, action: "not_found", route: "", params: {}, status: 404, allowed_methods: [] }
     end

@@ -200,7 +200,7 @@ pub function http_parse_response(raw)
 end
 
 ## Serializes an HttpResponse struct to HTTP/1.1 wire string format
-pub function http_format_response(res) -> string
+pub function http_format_response(res: HttpResponse) -> string
     if res is null
         return "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n"
     end
