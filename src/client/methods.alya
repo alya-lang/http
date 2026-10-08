@@ -87,3 +87,36 @@ end
 pub function basic_auth(username, password) -> string
     return "Basic " + base64_encode(username + ":" + password)
 end
+
+## Performs an HTTP request with arbitrary method and a binary body
+pub function http_request_bytes(method, url_str: string, headers = null, body_bytes = null)
+    let client = _default_client()
+    return client_execute_bytes(client, method, url_str, headers, body_bytes)
+end
+
+## Convenience GET request with a binary-safe response body
+pub function http_get_bytes(url_str: string, headers = null)
+    return http_request_bytes("GET", url_str, headers, [])
+end
+
+## Convenience POST request with a binary body
+pub function http_post_bytes(url_str: string, body_bytes = null, content_type: string = "application/octet-stream", headers = null)
+    if headers is null
+        headers = {}
+    end
+    if content_type is not null and content_type != ""
+        header_set(headers, "Content-Type", content_type)
+    end
+    return http_request_bytes("POST", url_str, headers, body_bytes)
+end
+
+## Convenience PUT request with a binary body
+pub function http_put_bytes(url_str: string, body_bytes = null, content_type: string = "application/octet-stream", headers = null)
+    if headers is null
+        headers = {}
+    end
+    if content_type is not null and content_type != ""
+        header_set(headers, "Content-Type", content_type)
+    end
+    return http_request_bytes("PUT", url_str, headers, body_bytes)
+end

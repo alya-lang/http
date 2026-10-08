@@ -63,13 +63,13 @@ pub function client(timeout_ms: int = 10000, follow_redirects: int = 1, max_redi
 end
 
 ## Creates a new HttpRequest struct instance.
-pub function request(method, path: string, query: string = "", headers = null, body: string = "", remote_addr: string = "", params = null, cookies = null, query_params = null)
-    return request_create(method, path, query, headers, body, remote_addr, params, cookies, query_params)
+pub function request(method, path: string, query: string = "", headers = null, body: string = "", remote_addr: string = "", params = null, cookies = null, query_params = null, body_bytes = null)
+    return request_create(method, path, query, headers, body, remote_addr, params, cookies, query_params, body_bytes)
 end
 
 ## Creates a new HttpResponse struct instance.
-pub function response(status_code: int = 200, status_text: string = "OK", headers = null, body: string = "")
-    return response_create(status_code, status_text, headers, body)
+pub function response(status_code: int = 200, status_text: string = "OK", headers = null, body: string = "", body_bytes = null)
+    return response_create(status_code, status_text, headers, body, body_bytes)
 end
 
 ## Creates a new HttpContext struct instance.

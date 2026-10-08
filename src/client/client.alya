@@ -198,3 +198,169 @@ pub function client_execute(client: HttpClient, method, url_str: string, extra_h
 
     return resp
 end
+
+## Performs an HTTP request with a binary body over raw TCP (binary-body safe).
+##
+## The request body travels as bytes and the response carries both `body`
+## (text form for NUL-free payloads) and `body_bytes` (always). HTTPS URLs
+## fall back to the text path for NUL-free bodies; binary bodies over TLS
+## return a -1 error until the TLS client gains byte transport.
+pub function client_execute_bytes(client: HttpClient, method, url_str: string, extra_headers = null, body_bytes = null)
+    if body_bytes is null
+        body_bytes = []
+    end
+    let parsed = url_pkg::url_parse(url_str)
+    let host = parsed.host
+    let scheme = parsed.scheme
+    if host == "" or (scheme != "http" and scheme != "https")
+        return HttpResponse { status_code: -1, status_text: "Invalid URL host: {url_str}", headers: {}, body: "", body_bytes: [], cookies: [] }
+    end
+
+    let p_str = url_pkg::url_effective_port(parsed)
+    let effective_port = 0
+    if len(p_str) > 0
+        effective_port = to_int(p_str)
+    end
+    if effective_port <= 0
+        if scheme == "https"
+            effective_port = 443
+        else
+            effective_port = 80
+        end
+    end
+
+    # Merge client default headers and extra headers
+    let req_headers = {}
+    if client is not null and client.headers is not null
+        let ckeys = client.headers.keys()
+        let ci = 0
+        while ci < len(ckeys)
+            let ck = ckeys[ci]
+            req_headers[ck] = client.headers[ck]
+            ci += 1
+        end
+    end
+    if extra_headers is not null
+        let ekeys = extra_headers.keys()
+        let ei = 0
+        while ei < len(ekeys)
+            let ek = ekeys[ei]
+            req_headers[lower(ek)] = extra_headers[ek]
+            ei += 1
+        end
+    end
+
+    let timeout_ms = 10000
+    let follow = 1
+    let max_redirs = 5
+    if client is not null
+        timeout_ms = client.timeout_ms
+        follow = client.follow_redirects
+        max_redirs = client.max_redirects
+    end
+
+    # HTTPS without byte transport: text bodies reuse the TLS path,
+    # binary bodies fail loudly instead of corrupting.
+    if scheme == "https" or effective_port == 443
+        if len(body_bytes) == 0 or bytes_are_text(body_bytes) == true
+            return https_execute(client, method, url_str, extra_headers, bytes_to_text_or_empty(body_bytes))
+        end
+        return HttpResponse { status_code: -1, status_text: "HTTPS binary bodies need TLS byte transport", headers: {}, body: "", body_bytes: [], cookies: [] }
+    end
+
+    # Native TCP socket request for standard HTTP
+    let sock = -1
+    try
+        sock = net::tcp_connect(host, effective_port)
+    catch e
+        return HttpResponse { status_code: -1, status_text: "Connection failed to {host}:{effective_port}", headers: {}, body: "", body_bytes: [], cookies: [] }
+    end
+    if sock < 0
+        return HttpResponse { status_code: -1, status_text: "Connection failed to {host}:{effective_port}", headers: {}, body: "", body_bytes: [], cookies: [] }
+    end
+
+    net::tcp_set_timeout(sock, timeout_ms)
+
+    let path = parsed.path
+    let path_fallback = 0
+    if path == ""
+        path = parsed.url_path
+        path_fallback = 1
+    end
+    if path == ""
+        path = "/"
+    end
+    let q = parsed.query
+    if q == "" and path_fallback == true
+        q = parsed.url_query
+    end
+    if q != ""
+        path += "?" + q
+    end
+
+    let req_line = method + " " + path + " HTTP/1.1\r\n"
+    let head = req_line + "Host: " + host + "\r\nUser-Agent: Alya-Http/0.1.0\r\nConnection: close\r\n"
+    head += "Content-Length: " + str(len(body_bytes)) + "\r\n"
+    head += headers_format(req_headers)
+    head += "\r\n"
+
+    net::tcp_send_bytes(sock, bytes_concat(crypto::str_to_bytes(head), body_bytes))
+
+    let raw_resp = []
+    let content_length = -1
+    let header_end_idx = -1
+
+    while 1
+        let chunk = net::tcp_recv_bytes(sock, 4096)
+        if chunk is null or len(chunk) == 0
+            break
+        end
+        let k = 0
+        while k < len(chunk)
+            raw_resp.push(chunk[k])
+            k += 1
+        end
+
+        if header_end_idx < 0
+            let sep = proto_find_bytes(raw_resp, [13, 10, 13, 10], 0)
+            if sep >= 0
+                header_end_idx = sep + 4
+                let hpart = lower(crypto::bytes_to_str(bytes_slice(raw_resp, 0, sep)))
+                let cl_idx = _proto_find(hpart, "content-length:", 0)
+                if cl_idx >= 0
+                    let val_start = cl_idx + 15
+                    let val_end = _proto_find(hpart, "\r\n", val_start)
+                    if val_end < 0
+                        val_end = _proto_find(hpart, "\n", val_start)
+                    end
+                    if val_end >= 0
+                        let cl_str = trim(substring(hpart, val_start, val_end - val_start))
+                        content_length = to_int(cl_str)
+                    end
+                end
+            end
+        end
+
+        if header_end_idx >= 0 and content_length >= 0
+            let cur_body_len = len(raw_resp) - header_end_idx
+            if cur_body_len >= content_length
+                break
+            end
+        end
+    end
+
+    net::tcp_close(sock)
+    let resp = http_parse_response_bytes(raw_resp)
+
+    # Handle HTTP redirects if configured
+    if follow == 1 and http_is_redirect(resp.status_code) and max_redirs > 0
+        let loc = header_get(resp.headers, "location", "")
+        if loc != ""
+            let next_url = url_pkg::url_join(url_str, loc)
+            client.max_redirects = max_redirs - 1
+            return client_execute_bytes(client, "GET", next_url, extra_headers, [])
+        end
+    end
+
+    return resp
+end

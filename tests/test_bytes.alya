@@ -1,0 +1,205 @@
+## Test Binary-Safe HTTP Bodies and WebSocket Byte Frames
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+import "std/test"
+import "std/net" as net
+import "../src/lib.alya" as http
+
+function bytes_same(a: array, b: array) -> int
+    if a is null or b is null
+        return 0
+    end
+    if len(a) != len(b)
+        return 0
+    end
+    let i = 0
+    while i < len(a)
+        if bit_xor(bit_and(a[i], 255), bit_and(b[i], 255))
+            return 0
+        end
+        i += 1
+    end
+    return 1
+end
+
+struct BytesStore
+    messages: array
+    closed_code: int
+end
+
+struct MockBytes
+    written: array
+    wire_bytes: array
+    closed: int
+end
+
+function bmsg(conn, msg, _is_bin)
+    let s = conn.data
+    push(s.messages, msg)
+end
+
+function bclose(conn, code, _reason)
+    let s = conn.data
+    s.closed_code = code
+end
+
+function bmock_write(stream, data)
+    stream.written.push(data)
+    return true
+end
+
+function bmock_write_bytes(stream, wire: array)
+    stream.wire_bytes.push(wire)
+    return len(wire)
+end
+
+function bmock_close(stream)
+    stream.closed = true
+    return true
+end
+
+function main()
+    test_suite("Binary Body & Byte Frame Tests")
+    let r = runner_new()
+
+    # Binary vector with NUL (0x00) and high bytes: impossible on the string wire.
+    let bin_payload = [72, 101, 0, 108, 108, 111, 0, 255, 1, 254]
+
+    # ═══════════════════════════════════════════════════════════
+    # 1. Request bytes roundtrip (parse + format)
+    # ═══════════════════════════════════════════════════════════
+    let req = http::request("POST", "/upload", "", {}, "", "", null, null, null, bin_payload)
+    let req_wire = http::http_format_request_bytes(req)
+    runner_assert(r, len(req_wire) > len(bin_payload), "request wire holds headers plus body")
+    let req_back = http::http_parse_request_bytes(req_wire, "127.0.0.1")
+    runner_assert_eq(r, bytes_same(req_back.body_bytes, bin_payload), 1, "request binary body roundtrips")
+    runner_assert_str_eq(r, req_back.body, "", "binary request body text stays empty")
+    runner_assert_str_eq(r, req_back.method, "POST", "request method survives bytes roundtrip")
+    runner_assert_str_eq(r, req_back.path, "/upload", "request path survives bytes roundtrip")
+    runner_assert_eq(r, bytes_same(http::request_body_bytes(req_back), bin_payload), 1, "request_body_bytes accessor matches")
+
+    # Text request over the bytes path keeps its string body too.
+    let treq = http::request("POST", "/echo", "", {}, "hello")
+    let treq_back = http::http_parse_request_bytes(http::http_format_request_bytes(treq), "")
+    runner_assert_str_eq(r, treq_back.body, "hello", "text body survives bytes roundtrip")
+    runner_assert_eq(r, bytes_same(treq_back.body_bytes, [104, 101, 108, 108, 111]), 1, "text body converts to bytes")
+
+    # ═══════════════════════════════════════════════════════════
+    # 2. Response bytes roundtrip
+    # ═══════════════════════════════════════════════════════════
+    let res = http::response(200, "OK", {}, "", bin_payload)
+    let res_wire = http::http_format_response_bytes(res)
+    let res_back = http::http_parse_response_bytes(res_wire)
+    runner_assert_eq(r, res_back.status_code, 200, "response status survives bytes roundtrip")
+    runner_assert_eq(r, bytes_same(res_back.body_bytes, bin_payload), 1, "response binary body roundtrips")
+    runner_assert_str_eq(r, res_back.body, "", "binary response body text stays empty")
+    runner_assert_eq(r, bytes_same(http::response_body_bytes(res_back), bin_payload), 1, "response_body_bytes accessor matches")
+
+    # ═══════════════════════════════════════════════════════════
+    # 3. Sync binary upload + download over loopback TCP
+    # ═══════════════════════════════════════════════════════════
+    let port = 19889
+    let host = "127.0.0.1"
+    let srv = http::server_new(port, host)
+    runner_assert_eq(r, http::server_start(srv), srv.server_sock, "binary test server listens")
+
+    let up_wire = http::http_format_request_bytes(http::request("POST", "/bin", "", {}, "", "", null, null, null, bin_payload))
+    let sock = net::tcp_connect(host, port)
+    runner_assert(r, sock >= 0, "client connects to binary server")
+    net::tcp_set_timeout(sock, 5000)
+    runner_assert(r, net::tcp_send_bytes(sock, up_wire) > 0, "client sends binary upload")
+
+    let ctx = http::server_accept(srv, 3000)
+    runner_assert(r, ctx is not null, "server accepts binary upload")
+    runner_assert_eq(r, bytes_same(http::request_body_bytes(ctx.req), bin_payload), 1, "server reads binary upload bytes")
+
+    http::ctx_header(ctx, "Content-Type", "application/octet-stream")
+    ctx.res.body_bytes = bin_payload
+    runner_assert_eq(r, http::server_send(srv, ctx), 1, "server sends binary download")
+
+    let raw_down = []
+    let guard = 0
+    while guard < 200
+        let chunk = net::tcp_recv_bytes(sock, 4096)
+        if chunk is null or len(chunk) == 0
+            break
+        end
+        let k = 0
+        while k < len(chunk)
+            raw_down.push(chunk[k])
+            k += 1
+        end
+        guard += 1
+    end
+    net::tcp_close(sock)
+    let down = http::http_parse_response_bytes(raw_down)
+    runner_assert_eq(r, down.status_code, 200, "binary download status 200")
+    runner_assert_eq(r, bytes_same(down.body_bytes, bin_payload), 1, "binary download bytes match upload")
+    http::server_close(srv)
+
+    # ═══════════════════════════════════════════════════════════
+    # 4. client_execute_bytes fast error paths (no network)
+    # ═══════════════════════════════════════════════════════════
+    let cli = http::client(3000, 0, 0)
+    let bad_url = http::client_execute_bytes(cli, "GET", "not a url", null, [])
+    runner_assert_eq(r, bad_url.status_code, -1, "invalid URL fails fast without network")
+    let no_tls = http::client_execute_bytes(cli, "POST", "https://127.0.0.1:1/x", null, bin_payload)
+    runner_assert_eq(r, no_tls.status_code, -1, "binary body over HTTPS fails loudly without byte transport")
+    runner_assert(r, index_of(no_tls.status_text, "TLS byte transport") >= 0, "HTTPS binary error names the limit")
+
+    # ═══════════════════════════════════════════════════════════
+    # 5. WebSocket byte frames (encode/parse/feed with NUL payloads)
+    # ═══════════════════════════════════════════════════════════
+    let ws_key = [9, 8, 7, 6]
+    let wenc = http::ws_encode_binary_bytes(bin_payload, 1, ws_key)
+    runner_assert(r, len(wenc) > len(bin_payload), "binary frame wire holds header plus payload")
+    let wparsed = http::ws_frame_parse_bytes(wenc, 0)
+    runner_assert(r, wparsed[0] is not null, "binary byte frame parses")
+    runner_assert_eq(r, wparsed[1], len(wenc), "binary byte frame consumes full wire")
+    runner_assert_eq(r, bytes_same(wparsed[0].payload, bin_payload), 1, "NUL payload survives masked roundtrip")
+
+    let wenc_plain = http::ws_encode_binary_bytes(bin_payload, 0)
+    let wparsed_plain = http::ws_frame_parse_bytes(wenc_plain, 0)
+    runner_assert_eq(r, bytes_same(wparsed_plain[0].payload, bin_payload), 1, "NUL payload survives unmasked roundtrip")
+
+    # Fragmented binary over feed_bytes with a NUL split across chunks.
+    let mock = MockBytes { written: [], wire_bytes: [], closed: 0 }
+    let ws = http::ws_connection_new(mock, 1, bmock_write, bmock_close, bmock_write_bytes)
+    let store = BytesStore { messages: [], closed_code: 0 }
+    ws.data = store
+    http::ws_on_message(ws, bmsg)
+    http::ws_on_close(ws, bclose)
+    let frag_wire = http::ws_encode_binary_start_bytes([72, 0], 1, ws_key)
+    let tail_wire = http::ws_encode_continuation_bytes([108, 0, 111], 1, 1, ws_key)
+    let half = len(frag_wire) - 2
+    let fh = []
+    let fi = 0
+    while fi < half
+        fh.push(frag_wire[fi])
+        fi += 1
+    end
+    let ft = []
+    while fi < len(frag_wire)
+        ft.push(frag_wire[fi])
+        fi += 1
+    end
+    runner_assert_eq(r, http::ws_feed_bytes(ws, fh), 0, "partial binary frame waits for more")
+    runner_assert_eq(r, http::ws_feed_bytes(ws, ft), 1, "split frame completes")
+    runner_assert_eq(r, http::ws_feed_bytes(ws, tail_wire), 1, "final continuation completes message")
+    runner_assert_eq(r, len(store.messages), 1, "fragmented binary delivered once")
+    runner_assert_eq(r, bytes_same(store.messages[0], [72, 0, 108, 0, 111]), 1, "fragmented NUL bytes reassemble exactly")
+    runner_assert_eq(r, ws.state, http::WebSocketState.Open, "bytes connection stays open")
+
+    # ws_send_bytes over the mock captures masked wire bytes.
+    let sws = http::ws_connection_new(mock, 0, bmock_write, bmock_close, bmock_write_bytes)
+    runner_assert(r, http::ws_send_bytes(sws, [1, 0, 2]) != 0, "ws_send_bytes writes")
+    let sent = mock.wire_bytes[len(mock.wire_bytes) - 1]
+    runner_assert_eq(r, sent[0], 130, "client binary frame has FIN+opcode byte")
+    runner_assert(r, sent[1] >= 128, "client binary frame is masked")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

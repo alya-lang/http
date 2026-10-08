@@ -207,20 +207,24 @@ pub function server_accept(server, timeout_ms: int = 1000)
     # Set 5-second socket timeout for reading the request
     net::tcp_set_timeout(client_sock, 5000)
 
-    # Read incoming request bytes
-    let raw_req = ""
+    # Read incoming request bytes (arrays preserve binary bodies)
+    let raw_req = []
     while 1
-        let chunk = net::tcp_recv(client_sock, 4096)
-        if chunk == "" or len(chunk) == 0
+        let chunk = net::tcp_recv_bytes(client_sock, 4096)
+        if chunk is null or len(chunk) == 0
             break
         end
-        raw_req += chunk
+        let k = 0
+        while k < len(chunk)
+            raw_req.push(chunk[k])
+            k += 1
+        end
         # If headers end delimiter is found, stop reading for simple requests
-        let delim_idx = _proto_find(raw_req, "\r\n\r\n", 0)
+        let delim_idx = proto_find_bytes(raw_req, [13, 10, 13, 10], 0)
         if delim_idx >= 0
             break
         end
-        let alt_delim = _proto_find(raw_req, "\n\n", 0)
+        let alt_delim = proto_find_bytes(raw_req, [10, 10], 0)
         if alt_delim >= 0
             break
         end
@@ -231,8 +235,45 @@ pub function server_accept(server, timeout_ms: int = 1000)
         return null
     end
 
+    # Read the declared body fully (binary uploads may span segments).
+    let hsep = proto_find_bytes(raw_req, [13, 10, 13, 10], 0)
+    if hsep >= 0
+        let head_text = bytes_to_text_or_empty(bytes_slice(raw_req, 0, hsep))
+        let want = 0
+        if head_text != ""
+            let hlow = lower(head_text)
+            let cl_idx = _proto_find(hlow, "content-length:", 0)
+            if cl_idx >= 0
+                let val_start = cl_idx + 15
+                let val_end = _proto_find(hlow, "\r\n", val_start)
+                if val_end < 0
+                    val_end = _proto_find(hlow, "\n", val_start)
+                end
+                if val_end < 0
+                    val_end = len(hlow)
+                end
+                want = to_int(trim(substring(hlow, val_start, val_end - val_start)))
+            end
+        end
+        let have = len(raw_req) - (hsep + 4)
+        let guard = 0
+        while want > have and guard < 2048
+            let more = net::tcp_recv_bytes(client_sock, 4096)
+            if more is null or len(more) == 0
+                break
+            end
+            let m = 0
+            while m < len(more)
+                raw_req.push(more[m])
+                m += 1
+            end
+            have = len(raw_req) - (hsep + 4)
+            guard += 1
+        end
+    end
+
     let remote_addr = net::tcp_peer_addr(client_sock)
-    let req = http_parse_request(raw_req, remote_addr)
+    let req = http_parse_request_bytes(raw_req, remote_addr)
     let res = response_create(200, "OK")
 
     return context_create(req, res, client_sock)
@@ -315,8 +356,17 @@ pub function server_send(server, ctx)
         return true
     end
 
-    let wire = http_format_response(ctx.res)
-    net::tcp_send(ctx.client_sock, wire)
+    # Binary responses (explicit body_bytes) travel as bytes; everything else
+    # keeps the legacy string path bit-for-bit.
+    let use_bytes = 0
+    if ctx.res is not null and ctx.res.body_bytes is not null and len(ctx.res.body_bytes) > 0
+        use_bytes = 1
+    end
+    if use_bytes == true
+        net::tcp_send_bytes(ctx.client_sock, http_format_response_bytes(ctx.res))
+    else
+        net::tcp_send(ctx.client_sock, http_format_response(ctx.res))
+    end
     net::tcp_close(ctx.client_sock)
     ctx.client_sock = -1
     return true

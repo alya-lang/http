@@ -73,7 +73,8 @@ end
 ## - `query`: Raw query string.
 ## - `query_params`: Parsed query map.
 ## - `headers`: Header map.
-## - `body`: Body payload value.
+## - `body`: Body payload value (string for text; empty when binary).
+## - `body_bytes`: Full body as byte array (source of truth for binary, null unless parsed or set).
 ## - `params`: Route parameter map.
 ## - `cookies`: Cookie map.
 ## - `remote_addr`: Client address string.
@@ -85,6 +86,7 @@ pub struct HttpRequest
     query_params: map,
     headers: map,
     body,
+    body_bytes: array,
     params: map,
     cookies: map,
     remote_addr: string
@@ -308,10 +310,11 @@ end
 ## - `params`: Route parameter map (defaults to empty when null).
 ## - `cookies`: Cookie map (defaults to empty when null).
 ## - `query_params`: Parsed query map (defaults to empty when null).
+## - `body_bytes`: Full body as byte array (defaults to null; binary source of truth).
 ##
 ## ### Returns
 ## The new `HttpRequest` instance.
-pub function request_create(method, path: string, query: string = "", headers = null, body: string = "", remote_addr: string = "", params = null, cookies = null, query_params = null) -> HttpRequest
+pub function request_create(method, path: string, query: string = "", headers = null, body: string = "", remote_addr: string = "", params = null, cookies = null, query_params = null, body_bytes = null) -> HttpRequest
     if headers is null
         headers = {}
     end
@@ -323,6 +326,9 @@ pub function request_create(method, path: string, query: string = "", headers = 
     end
     if query_params is null
         query_params = {}
+    end
+    if body_bytes is null
+        body_bytes = []
     end
     let full_url = path
     if query != ""
@@ -336,6 +342,7 @@ pub function request_create(method, path: string, query: string = "", headers = 
         query_params: query_params,
         headers: headers,
         body: body,
+        body_bytes: body_bytes,
         params: params,
         cookies: cookies,
         remote_addr: remote_addr

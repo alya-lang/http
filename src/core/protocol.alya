@@ -114,6 +114,7 @@ pub function http_parse_request(raw, remote_addr: string = "")
         query_params: query_params,
         headers: headers,
         body: body_part,
+        body_bytes: crypto::str_to_bytes(body_part),
         params: {},
         cookies: cookies,
         remote_addr: remote_addr
@@ -362,6 +363,171 @@ pub function response_body_text(res) -> string
         return ""
     end
     return res.body
+end
+
+## Copies `count` elements of a byte array starting at `start` into a new array.
+pub function bytes_slice(data: array, start: int, count: int) -> array
+    let out = []
+    if data is null or count <= 0
+        return out
+    end
+    let s = start
+    if s < 0
+        s = 0
+    end
+    let e = s + count
+    if e > len(data)
+        e = len(data)
+    end
+    let i = s
+    while i < e
+        out.push(data[i])
+        i += 1
+    end
+    return out
+end
+
+## Concatenates two byte arrays into a new array (null-safe).
+pub function bytes_concat(a, b) -> array
+    let out = []
+    if a is not null
+        let i = 0
+        while i < len(a)
+            out.push(a[i])
+            i += 1
+        end
+    end
+    if b is not null
+        let j = 0
+        while j < len(b)
+            out.push(b[j])
+            j += 1
+        end
+    end
+    return out
+end
+
+## Returns the request body as bytes, converting text when needed
+pub function request_body_bytes(req) -> array
+    if req is null
+        return []
+    end
+    if req.body_bytes is not null and len(req.body_bytes) > 0
+        return req.body_bytes
+    end
+    if req.body is null or req.body == ""
+        return []
+    end
+    return crypto::str_to_bytes(req.body)
+end
+
+## Parses an HTTP/1.1 request from raw bytes (binary-body safe)
+##
+## Headers decode as ASCII text; the body stays a byte array while `body`
+## carries the text form for NUL-free payloads (empty otherwise).
+pub function http_parse_request_bytes(raw: array, remote_addr: string = "")
+    if raw is null or len(raw) == 0
+        return request_create("GET", "/", "", {}, "", remote_addr)
+    end
+    let sep = proto_find_bytes(raw, [13, 10, 13, 10], 0)
+    let head_len = len(raw)
+    let body_start = len(raw)
+    if sep >= 0
+        head_len = sep
+        body_start = sep + 4
+    end
+    let parsed = http_parse_request(crypto::bytes_to_str(bytes_slice(raw, 0, head_len)) + "\r\n\r\n", remote_addr)
+    let body = bytes_slice(raw, body_start, len(raw) - body_start)
+    parsed.body = bytes_to_text_or_empty(body)
+    parsed.body_bytes = body
+    return parsed
+end
+
+## Serializes an HttpRequest struct to HTTP/1.1 wire bytes (binary-body safe)
+pub function http_format_request_bytes(req) -> array
+    let body = request_body_bytes(req)
+    if req is null
+        return crypto::str_to_bytes("GET / HTTP/1.1\r\n\r\n")
+    end
+
+    let target = req.path
+    if req.query is not null and req.query != ""
+        target += "?" + req.query
+    end
+    if target == ""
+        target = "/"
+    end
+
+    let head = req.method + " " + target + " HTTP/1.1\r\n"
+
+    let headers = req.headers
+    if headers is null
+        headers = {}
+    end
+
+    if !has(headers, "user-agent")
+        headers["user-agent"] = "Alya-Http/0.1.0"
+    end
+
+    if !has(headers, "connection")
+        headers["connection"] = "close"
+    end
+
+    if !has(headers, "content-length")
+        headers["content-length"] = str(len(body))
+    end
+
+    head += headers_format(headers)
+    head += "\r\n"
+
+    return bytes_concat(crypto::str_to_bytes(head), body)
+end
+
+## Serializes an HttpResponse struct to HTTP/1.1 wire bytes (binary-body safe)
+pub function http_format_response_bytes(res) -> array
+    if res is null
+        return crypto::str_to_bytes("HTTP/1.1 500 Internal Server Error\r\n\r\n")
+    end
+
+    let status_text = res.status_text
+    if status_text is null or status_text == ""
+        status_text = http_status_text(res.status_code)
+    end
+
+    let head = "HTTP/1.1 " + str(res.status_code) + " " + status_text + "\r\n"
+
+    let headers = res.headers
+    if headers is null
+        headers = {}
+    end
+
+    let body = response_body_bytes(res)
+    if !has(headers, "content-length")
+        headers["content-length"] = str(len(body))
+    end
+
+    if !has(headers, "content-type") and len(body) > 0
+        headers["content-type"] = "application/octet-stream"
+    end
+
+    if !has(headers, "connection")
+        headers["connection"] = "close"
+    end
+
+    head += headers_format(headers)
+
+    if res.cookies is not null
+        let ci = 0
+        while ci < len(res.cookies)
+            let c = res.cookies[ci]
+            head += "Set-Cookie: " + cookie_format(c) + "\r\n"
+            ci += 1
+        end
+    end
+
+    head += "\r\n"
+
+    return bytes_concat(crypto::str_to_bytes(head), body)
 end
 
 ## Serializes an HttpRequest struct to HTTP/1.1 wire string format

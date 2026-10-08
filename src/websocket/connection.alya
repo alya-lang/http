@@ -20,7 +20,9 @@ pub struct WebSocketConnection
     tag: string
     data
     buffer
+    buffer_bytes
     write_fn
+    write_bytes_fn
     close_fn
     on_message_cb
     on_close_cb
@@ -29,6 +31,7 @@ pub struct WebSocketConnection
     on_error_cb
     frag_opcode: int
     frag_buffer
+    frag_buf_bytes
 end
 
 # ═══════════════════════════════════════════════════════════════
@@ -44,7 +47,7 @@ function _ws_default_close(s)
 end
 
 ## Creates and initializes a new WebSocket connection wrapper
-pub function ws_connection_new(stream, is_server: int = 1, write_fn = null, close_fn = null)
+pub function ws_connection_new(stream, is_server: int = 1, write_fn = null, close_fn = null, write_bytes_fn = null)
     if write_fn is null
         write_fn = _ws_default_write
     end
@@ -58,7 +61,9 @@ pub function ws_connection_new(stream, is_server: int = 1, write_fn = null, clos
         tag: "ws_conn",
         data: null,
         buffer: "",
+        buffer_bytes: [],
         write_fn: write_fn,
+        write_bytes_fn: write_bytes_fn,
         close_fn: close_fn,
         on_message_cb: null,
         on_close_cb: null,
@@ -66,7 +71,8 @@ pub function ws_connection_new(stream, is_server: int = 1, write_fn = null, clos
         on_pong_cb: null,
         on_error_cb: null,
         frag_opcode: -1,
-        frag_buffer: ""
+        frag_buffer: "",
+        frag_buf_bytes: []
     }
 end
 
@@ -164,6 +170,36 @@ end
 # Stream Feeding & Frame Ingestion
 # ═══════════════════════════════════════════════════════════════
 
+# Validates one parsed frame against RFC 6455 §5.1/§5.3/§5.4/§5.5.
+# Returns "" when valid, otherwise the protocol-error reason.
+# Shared by the string and bytes feed paths.
+function _ws_check_frame(ws: WebSocketConnection, frame) -> string
+    let op = frame.opcode
+    if op >= 8
+        if op != WebSocketOpCode.Close and op != WebSocketOpCode.Ping and op != WebSocketOpCode.Pong
+            return "unknown opcode " + str(op)
+        end
+        # Control frames MUST NOT be fragmented and carry at most 125 bytes.
+        if frame.fin == false or frame.len > 125
+            return "invalid control frame (fragmented or oversized)"
+        end
+    elif op != WebSocketOpCode.Continuation and op != WebSocketOpCode.Text and op != WebSocketOpCode.Binary
+        return "unknown opcode " + str(op)
+    end
+
+    # Frames from the client MUST be masked; frames from the server MUST NOT be.
+    if ws.is_server == true
+        if frame.masked == false
+            return "client frame not masked"
+        end
+    else
+        if frame.masked == true
+            return "protocol error"
+        end
+    end
+    return ""
+end
+
 # Fails the connection with a 1002 (protocol error) close after notifying
 # the error callback, if any. Callers must stop feeding after this.
 function _ws_protocol_error(ws: WebSocketConnection, reason: string)
@@ -172,6 +208,15 @@ function _ws_protocol_error(ws: WebSocketConnection, reason: string)
         cb(ws, reason)
     end
     ws_close(ws, 1002, reason)
+end
+
+# Bytes-wire variant: the close handshake itself stays NUL-free by construction.
+function _ws_protocol_error_bytes(ws: WebSocketConnection, reason: string)
+    let cb = ws.on_error_cb
+    if cb is not null
+        cb(ws, reason)
+    end
+    ws_close_bytes(ws, 1002)
 end
 
 ## Feeds incoming network data into the connection buffer and processes all frames
@@ -204,34 +249,10 @@ pub function ws_feed(ws: WebSocketConnection, chunk)
 
         let op = frame.opcode
 
-        # ── RFC 6455 §5.4/§5.5: opcode + control-frame validation ──
-        if op >= 8
-            if op != WebSocketOpCode.Close and op != WebSocketOpCode.Ping and op != WebSocketOpCode.Pong
-                _ws_protocol_error(ws, "unknown opcode " + str(op))
-                break
-            end
-            # Control frames MUST NOT be fragmented and carry at most 125 bytes.
-            if frame.fin == false or frame.len > 125
-                _ws_protocol_error(ws, "invalid control frame (fragmented or oversized)")
-                break
-            end
-        elif op != WebSocketOpCode.Continuation and op != WebSocketOpCode.Text and op != WebSocketOpCode.Binary
-            _ws_protocol_error(ws, "unknown opcode " + str(op))
+        let violation = _ws_check_frame(ws, frame)
+        if violation != ""
+            _ws_protocol_error(ws, violation)
             break
-        end
-
-        # ── RFC 6455 §5.1/§5.3: masking rules ──
-        # Frames from the client MUST be masked; frames from the server MUST NOT be.
-        if ws.is_server == true
-            if frame.masked == false
-                _ws_protocol_error(ws, "client frame not masked")
-                break
-            end
-        else
-            if frame.masked == true
-                _ws_protocol_error(ws, "protocol error")
-                break
-            end
         end
 
         # ── RFC 6455 §5.4: message fragmentation ──
@@ -306,6 +327,180 @@ pub function ws_feed(ws: WebSocketConnection, chunk)
     return frames_processed
 end
 
+## Transmits a binary message with a byte-array payload (NUL-safe).
+##
+## Uses `write_bytes_fn` when the connection provides one, otherwise falls
+## back to `tcp_send_bytes` on the raw socket fd. Event-stream connections
+## without a bytes writer cannot send binary frames.
+pub function ws_send_bytes(ws: WebSocketConnection, data: array)
+    if ws is null or ws.state != WebSocketState.Open
+        return false
+    end
+    let mask = ws.is_server == true ? false : true
+    let wire = ws_encode_binary_bytes(data, mask)
+    return _ws_raw_write_bytes(ws, wire)
+end
+
+function _ws_raw_write_bytes(ws: WebSocketConnection, wire)
+    if ws is null or ws.stream is null
+        return -1
+    end
+    if ws.write_bytes_fn is not null
+        let w_fn = ws.write_bytes_fn
+        return w_fn(ws.stream, wire)
+    end
+    return net::tcp_send_bytes(ws.stream, wire)
+end
+
+## Sends a pong heartbeat frame with a byte-array payload (NUL-safe)
+pub function ws_pong_bytes(ws: WebSocketConnection, data = null)
+    if ws is null or ws.state != WebSocketState.Open
+        return false
+    end
+    let mask = ws.is_server == true ? false : true
+    let wire = ws_frame_encode_bytes(WebSocketOpCode.Pong, data, 1, mask)
+    return _ws_raw_write_bytes(ws, wire)
+end
+
+## Performs the close handshake over the bytes wire (NUL-safe by construction).
+##
+## The close reason is omitted: reason strings cannot hold NUL bytes, so an
+## arbitrary reason could not round-trip. Code-only closes always encode.
+pub function ws_close_bytes(ws: WebSocketConnection, code: int = 1000)
+    if ws is null or ws.state == WebSocketState.Closed
+        return false
+    end
+    let mask = ws.is_server == true ? false : true
+    let wire = ws_frame_encode_bytes(WebSocketOpCode.Close, [bit_and(bit_shr(code, 8), 255), bit_and(code, 255)], 1, mask)
+    _ws_raw_write_bytes(ws, wire)
+
+    ws.state = WebSocketState.Closed
+    _ws_raw_close(ws)
+
+    let cb = ws.on_close_cb
+    if cb is not null
+        cb(ws, code, "")
+    end
+    return true
+end
+
+## Feeds incoming byte-array network data and processes all frames (NUL-safe).
+##
+## Array counterpart of `ws_feed`: every data callback receives an integer
+## array payload, control replies go out over the bytes wire, and protocol
+## violations fail with a code-only 1002 close. Do not mix string and bytes
+## feeds on one connection (each keeps its own buffer).
+pub function ws_feed_bytes(ws: WebSocketConnection, chunk: array)
+    if ws is null or chunk is null or len(chunk) == 0
+        return false
+    end
+
+    let ci = 0
+    while ci < len(chunk)
+        ws.buffer_bytes.push(chunk[ci])
+        ci += 1
+    end
+    let frames_processed = 0
+
+    while len(ws.buffer_bytes) > 0
+        let parsed = ws_frame_parse_bytes(ws.buffer_bytes, 0)
+        let frame: WebSocketFrame = parsed[0]
+        let consumed = parsed[1]
+
+        if frame is null or consumed == false
+            # Buffer contains partial frame, wait for more chunks
+            break
+        end
+
+        # Advance buffer by consumed bytes
+        let rest = []
+        let ri = consumed
+        while ri < len(ws.buffer_bytes)
+            rest.push(ws.buffer_bytes[ri])
+            ri += 1
+        end
+        ws.buffer_bytes = rest
+
+        frames_processed += 1
+
+        let op = frame.opcode
+
+        let violation = _ws_check_frame(ws, frame)
+        if violation != ""
+            _ws_protocol_error_bytes(ws, violation)
+            break
+        end
+
+        # ── RFC 6455 §5.4: message fragmentation ──
+        if op == WebSocketOpCode.Continuation
+            if ws.frag_opcode < 0
+                _ws_protocol_error_bytes(ws, "unexpected continuation frame")
+                break
+            end
+            let fi = 0
+            while fi < len(frame.payload)
+                ws.frag_buf_bytes.push(frame.payload[fi])
+                fi += 1
+            end
+            if frame.fin == true
+                let fcb = ws.on_message_cb
+                if fcb is not null
+                    let fis_bin = 0
+                    if ws.frag_opcode == WebSocketOpCode.Binary
+                        fis_bin = 1
+                    end
+                    fcb(ws, ws.frag_buf_bytes, fis_bin)
+                end
+                ws.frag_opcode = -1
+                ws.frag_buf_bytes = []
+            end
+        elif op == WebSocketOpCode.Text or op == WebSocketOpCode.Binary
+            if ws.frag_opcode >= 0
+                _ws_protocol_error_bytes(ws, "new message started before fragmented message completed")
+                break
+            end
+            let is_bin = 0
+            if op == WebSocketOpCode.Binary
+                is_bin = 1
+            end
+            if frame.fin == true
+                let cb = ws.on_message_cb
+                if cb is not null
+                    cb(ws, frame.payload, is_bin)
+                end
+            else
+                ws.frag_opcode = op
+                ws.frag_buf_bytes = frame.payload
+            end
+        else
+            # Process control frame based on OpCode
+            when op
+                is WebSocketOpCode.Ping then
+                    # Automatic RFC 6455 Ping-Pong reply
+                    ws_pong_bytes(ws, frame.payload)
+                    let cb = ws.on_ping_cb
+                    if cb is not null
+                        cb(ws, frame.payload)
+                    end
+                is WebSocketOpCode.Pong then
+                    let cb = ws.on_pong_cb
+                    if cb is not null
+                        cb(ws, frame.payload)
+                    end
+                is WebSocketOpCode.Close then
+                    let code = 1000
+                    if frame.len >= 2
+                        code = bit_or(bit_shl(frame.payload[0], 8), frame.payload[1])
+                    end
+                    ws_close_bytes(ws, code)
+                    break
+            end
+        end
+    end
+
+    return frames_processed
+end
+
 # ═══════════════════════════════════════════════════════════════
 # Event Registration & Struct Methods
 # ═══════════════════════════════════════════════════════════════
@@ -360,6 +555,11 @@ pub function WebSocketConnection.send_binary(self: WebSocketConnection, data)
     return ws_send_binary(self, data)
 end
 
+## Sends a binary frame with a byte-array payload on this connection.
+pub function WebSocketConnection.send_bytes(self: WebSocketConnection, data: array)
+    return ws_send_bytes(self, data)
+end
+
 ## Sends a ping frame on this connection.
 pub function WebSocketConnection.ping(self: WebSocketConnection, data: string = "")
     return ws_ping(self, data)
@@ -378,6 +578,11 @@ end
 ## Feeds received bytes into this connection.
 pub function WebSocketConnection.feed(self: WebSocketConnection, chunk)
     return ws_feed(self, chunk)
+end
+
+## Feeds received byte-array data into this connection.
+pub function WebSocketConnection.feed_bytes(self: WebSocketConnection, chunk: array)
+    return ws_feed_bytes(self, chunk)
 end
 
 ## Registers a message callback on this connection.

@@ -291,6 +291,84 @@ pub function ws_encode_binary_start(data, mask: int = 0, mask_key = null)
     return ws_frame_encode(WebSocketOpCode.Binary, data, 0, mask, mask_key)
 end
 
+## Serializes an RFC 6455 WebSocket frame with a byte-array payload into wire bytes.
+##
+## Array wire form (NUL-safe): each header and payload byte becomes one element.
+pub function ws_frame_encode_bytes(opcode: int, payload = null, is_final: int = 1, mask: int = 0, mask_key = null) -> array
+    if payload is null
+        payload = []
+    end
+    let plen = len(payload)
+
+    let b0 = bit_and(opcode, 15)
+    if is_final == true
+        b0 = bit_or(b0, 128)
+    end
+
+    let mask_bit = 0
+    let effective_mask_key = [53, 102, 169, 212]
+    if mask == true
+        mask_bit = 128
+        if mask_key is not null and len(mask_key) >= 4
+            effective_mask_key = mask_key
+        end
+    end
+
+    let wire = [b0]
+
+    if plen <= 125
+        wire.push(bit_or(mask_bit, plen))
+    elif plen <= 65535
+        wire.push(bit_or(mask_bit, 126))
+        wire.push(bit_and(bit_shr(plen, 8), 255))
+        wire.push(bit_and(plen, 255))
+    else
+        wire.push(bit_or(mask_bit, 127))
+        wire.push(0)
+        wire.push(0)
+        wire.push(0)
+        wire.push(0)
+        wire.push(bit_and(bit_shr(plen, 24), 255))
+        wire.push(bit_and(bit_shr(plen, 16), 255))
+        wire.push(bit_and(bit_shr(plen, 8), 255))
+        wire.push(bit_and(plen, 255))
+    end
+
+    if mask == true
+        wire.push(effective_mask_key[0])
+        wire.push(effective_mask_key[1])
+        wire.push(effective_mask_key[2])
+        wire.push(effective_mask_key[3])
+    end
+
+    let k = 0
+    while k < plen
+        let b = bit_and(payload[k], 255)
+        if mask == true
+            b = bit_xor(b, effective_mask_key[k % 4])
+        end
+        wire.push(b)
+        k += 1
+    end
+
+    return wire
+end
+
+## Encodes a binary message frame with a byte-array payload (OpCode 2, NUL-safe)
+pub function ws_encode_binary_bytes(data = null, mask: int = 0, mask_key = null)
+    return ws_frame_encode_bytes(WebSocketOpCode.Binary, data, 1, mask, mask_key)
+end
+
+## Encodes a continuation fragment with a byte-array payload (OpCode 0, NUL-safe)
+pub function ws_encode_continuation_bytes(data = null, is_final: int = 0, mask: int = 0, mask_key = null)
+    return ws_frame_encode_bytes(WebSocketOpCode.Continuation, data, is_final, mask, mask_key)
+end
+
+## Encodes the first fragment of a fragmented binary message with bytes (OpCode 2, FIN = 0)
+pub function ws_encode_binary_start_bytes(data = null, mask: int = 0, mask_key = null)
+    return ws_frame_encode_bytes(WebSocketOpCode.Binary, data, 0, mask, mask_key)
+end
+
 # ═══════════════════════════════════════════════════════════════
 # Frame Deserialization / Streaming Parser
 # ═══════════════════════════════════════════════════════════════
@@ -375,6 +453,98 @@ pub function ws_frame_parse(raw_data, offset: int = 0)
         end
     else
         payload = payload_raw
+    end
+
+    let consumed = header_len + plen
+    let frame = WebSocketFrame {
+        fin: fin,
+        opcode: opcode,
+        masked: masked,
+        payload: payload,
+        mask_key: mask_key,
+        len: plen
+    }
+
+    return [frame, consumed]
+end
+
+## Attempts to parse the next RFC 6455 WebSocket frame from a byte array.
+## Returns [WebSocketFrame, bytes_consumed] with an array payload (NUL-safe).
+## If incomplete, returns [null, 0].
+pub function ws_frame_parse_bytes(raw_data: array, offset: int = 0)
+    if raw_data is null
+        return [null, 0]
+    end
+    let total_len = len(raw_data)
+    let raw_len = total_len - offset
+    if raw_len < 2
+        return [null, 0]
+    end
+
+    let b0 = bit_and(raw_data[offset], 255)
+    let b1 = bit_and(raw_data[offset + 1], 255)
+
+    let fin = bit_shr(bit_and(b0, 128), 7)
+    let opcode = bit_and(b0, 15)
+    let masked = bit_shr(bit_and(b1, 128), 7)
+    let plen = bit_and(b1, 127)
+    let header_len = 2
+
+    if plen == 126
+        if raw_len < header_len + 2
+            return [null, 0]
+        end
+        let p0 = bit_and(raw_data[offset + 2], 255)
+        let p1 = bit_and(raw_data[offset + 3], 255)
+        plen = bit_or(bit_shl(p0, 8), p1)
+        header_len = 4
+    elif plen == 127
+        if raw_len < header_len + 8
+            return [null, 0]
+        end
+        let hi = 0
+        let k = 0
+        while k < 4
+            hi = bit_or(bit_shl(hi, 8), bit_and(raw_data[offset + header_len + k], 255))
+            k += 1
+        end
+        let lo = 0
+        k = 0
+        while k < 4
+            lo = bit_or(bit_shl(lo, 8), bit_and(raw_data[offset + header_len + 4 + k], 255))
+            k += 1
+        end
+        plen = bit_or(bit_shl(hi, 32), lo)
+        header_len = 10
+    end
+
+    let mask_key = []
+    if masked == true
+        if raw_len < header_len + 4
+            return [null, 0]
+        end
+        mask_key = [
+            bit_and(raw_data[offset + header_len], 255),
+            bit_and(raw_data[offset + header_len + 1], 255),
+            bit_and(raw_data[offset + header_len + 2], 255),
+            bit_and(raw_data[offset + header_len + 3], 255)
+        ]
+        header_len += 4
+    end
+
+    if raw_len < header_len + plen
+        return [null, 0]
+    end
+
+    let payload = []
+    let pi = 0
+    while pi < plen
+        let pb = bit_and(raw_data[offset + header_len + pi], 255)
+        if masked == true
+            pb = bit_xor(pb, mask_key[pi % 4])
+        end
+        payload.push(pb)
+        pi += 1
     end
 
     let consumed = header_len + plen
