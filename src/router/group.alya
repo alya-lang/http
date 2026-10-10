@@ -67,6 +67,11 @@ pub function group_any(g, pattern: string, action)
     return router_group_add(g.router, g.prefix, "ANY", pattern, action)
 end
 
+## Registers a handler-function route in this group for any HTTP method
+pub function group_on(g, method, pattern: string, handler)
+    return router_group_on(g.router, g.prefix, method, pattern, handler)
+end
+
 ## Creates a nested sub-group under this group prefix
 pub function group_subgroup(g, sub_prefix: string)
     let full_prefix = _router_join_prefix(g.prefix, sub_prefix)

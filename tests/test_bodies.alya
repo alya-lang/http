@@ -1,0 +1,65 @@
+## Test suite for JSON body and Mustache view helpers
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+import "std/test"
+import "../src/lib.alya" as http
+
+@cfg(feature = "json")
+function main()
+    test_suite("HTTP Body Helper Tests")
+    let r = runner_new()
+
+    # 1. String maps serialize into quoted JSON responses (map order is
+    # not stable, so assert single-key bodies)
+    let ctx1 = http::ctx_new(http::request_create("GET", "/v"))
+    http::ctx_json_map(ctx1, {"ok": "true"})
+    runner_assert_eq(r, ctx1.res.status_code, 200, "json map status")
+    runner_assert_str_eq(r, http::header_get(ctx1.res.headers, "Content-Type"), "application/json; charset=utf-8", "json map content-type")
+    runner_assert_str_eq(r, ctx1.res.body, "{\"ok\": \"true\"}", "json map body")
+
+    # 1b. Values are JSON-escaped
+    let ctx1b = http::ctx_new(http::request_create("GET", "/v"))
+    http::ctx_json_map(ctx1b, {"q": "a\"b"})
+    runner_assert_str_eq(r, ctx1b.res.body, "{\"q\": \"a\\\"b\"}", "json map escapes quotes")
+
+    # 2. Parse request bodies, null on empty/invalid (never throws)
+    let req2 = http::request_create("POST", "/v", "", {}, "{\"a\":1}")
+    let ctx2 = http::ctx_new(req2)
+    let parsed = http::ctx_body_json(ctx2)
+    runner_assert(r, parsed is not null, "valid body parses")
+    let ctx3 = http::ctx_new(http::request_create("POST", "/v", "", {}, "{oops"))
+    runner_assert(r, http::ctx_body_json(ctx3) is null, "invalid body yields null")
+    let ctx4 = http::ctx_new(http::request_create("POST", "/v"))
+    runner_assert(r, http::ctx_body_json(ctx4) is null, "empty body yields null")
+
+    # 3. Mustache templates render as HTML (braces concatenated so the
+    # Alya string interpolator leaves the tags intact)
+    @cfg(feature = "mustache")
+    let ot = "{{"
+    @cfg(feature = "mustache")
+    let ct = "}}"
+    @cfg(feature = "mustache")
+    let ctx5 = http::ctx_new(http::request_create("GET", "/page"))
+    @cfg(feature = "mustache")
+    http::ctx_render(ctx5, "<h1>Hello, " + ot + "name" + ct + "!</h1>", {"name": "Alya"})
+    @cfg(feature = "mustache")
+    runner_assert_str_eq(r, ctx5.res.body, "<h1>Hello, Alya!</h1>", "template rendered")
+    @cfg(feature = "mustache")
+    runner_assert_str_eq(r, http::header_get(ctx5.res.headers, "Content-Type"), "text/html; charset=utf-8", "render content-type")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+@cfg(not(feature = "json"))
+function main()
+    test_suite("HTTP Body Helper Tests (skipped without json feature)")
+    let r = runner_new()
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

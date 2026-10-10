@@ -17,6 +17,10 @@ Production-ready HTTP client, server, router, compression, and middleware toolki
 - 🌐 **Full HTTP Client**: Supports GET, POST, PUT, DELETE, PATCH, HEAD, and OPTIONS with custom headers, query params, timeout handling, and automatic redirect following.
 - 🔒 **Native HTTPS**: Real TLS 1.2 via `alya-lang/tls` (RSA key exchange, certificate verification, binary-safe bodies) — no subprocess, no shell, no temp files. Verified live against OpenSSL and Python TLS servers.
 - 🚀 **HTTP Server & Context**: Built on low-level TCP sockets (`std/net`) or non-blocking event loops, offering intuitive request context (`HttpContext`), JSON responses, text responses, file serving, and status helpers.
+- 🧭 **Handler Dispatch**: Register first-class handler functions (`router_on`, `router_on_get`, ...) and invoke them with `router_dispatch` — string action names keep working for match-only flows.
+- 🔁 **Keep-Alive & Serve Loop**: Opt-in HTTP/1.1 connection reuse (`server_enable_keep_alive`), single-request reads (`server_read_request`), and blocking serve helpers (`server_serve_once`, `server_serve`).
+- 🔐 **Protective Middleware**: HTTP Basic/Bearer auth (`mw_require_basic`, `mw_require_bearer`), fixed-window rate limiting (`mw_apply_rate_limit`), and request ID tracing (`mw_request_id`) — all enforceable from `server_process` via `server_enable_*`.
+- 🧩 **JSON & View Helpers**: Parse request bodies (`ctx_body_json`), answer string maps (`ctx_json_map`), and render Mustache templates as HTML (`ctx_render`, `ctx_render_file`).
 - 🛣️ **Parametric Router & Route Groups**: Fast URL pattern matching with wildcard (`*path`) and named parameters (`:id`), plus subrouter groups with shared path prefixes and middleware chains.
 - 🛡️ **Extensible Middleware**: Out-of-the-box middleware for Compression (`mw_apply_compression`), CORS (`cors_middleware`), request logging (`logger_middleware`), panic recovery (`recovery_middleware`), and static file serving (`static_middleware`).
 - 🍪 **Cookie & Header Management**: RFC-compliant Cookie serialization/parsing (`Set-Cookie` and `Cookie` headers) and case-insensitive HTTP header operations.
@@ -37,12 +41,14 @@ http/
 │   │   ├── status.alya     # HTTP status codes & standard status messages
 │   │   ├── headers.alya    # Case-insensitive header dictionary helpers
 │   │   ├── cookies.alya    # Cookie parsing, serialization, and Set-Cookie generation
+│   │   ├── multipart.alya  # multipart/form-data parser and file upload types
 │   │   ├── compression.alya# HTTP content encoding, negotiation, and compression engine
 │   │   ├── protocol.alya   # HTTP/1.1 request & response parsing and serialization
 │   │   └── sse.alya        # Server-Sent Events + HTTP/1.1 chunked transfer encoding
 │   ├── router/
 │   │   ├── route.alya      # Route definition and parameter extractor
 │   │   ├── router.alya     # HTTP router and route registry
+│   │   ├── dispatch.alya   # Handler-function dispatch over RouteMatch
 │   │   └── group.alya      # Route grouping with prefix and sub-middlewares
 │   ├── server/
 │   │   ├── context.alya    # HttpContext request/response lifecycle helpers
@@ -58,6 +64,9 @@ http/
 │   │   ├── tls_client.alya # Native HTTPS via alya-lang/tls (no curl bridge)
 │   │   └── methods.alya    # Convenience functions (http_get, http_post, etc.)
 │   └── middleware/
+│       ├── auth.alya       # HTTP Basic and Bearer authentication gates
+│       ├── rate_limit.alya # Fixed-window in-memory rate limiter (429)
+│       ├── request_id.alya # X-Request-ID trace correlation
 │       ├── compress.alya   # HTTP response compression middleware (Brotli, Zstd, Gzip, Deflate)
 │       ├── cors.alya       # Cross-Origin Resource Sharing (CORS) handler
 │       ├── logger.alya     # Request/response logging middleware
@@ -66,14 +75,19 @@ http/
 ├── examples/
 │   ├── compression_demo.alya # Dedicated HTTP compression showcase
 │   └── demo.alya           # Comprehensive usage demo
-├── tests/                  # 23 test suites (100% passing)
+├── tests/                  # 28 test suites (100% passing)
+│   ├── test_auth.alya
+│   ├── test_bodies.alya
 │   ├── test_bytes.alya
 │   ├── test_client.alya
 │   ├── test_compression.alya
 │   ├── test_context.alya
 │   ├── test_cookies.alya
+│   ├── test_dispatch.alya
+│   ├── test_guards.alya
 │   ├── test_headers.alya
 │   ├── test_https.alya
+│   ├── test_keepalive.alya
 │   ├── test_middleware.alya
 │   ├── test_multipart.alya
 │   ├── test_protocol.alya
@@ -119,6 +133,8 @@ alya install
 | `compress` | ✅ | Response compression middleware (`compression()`, `compress()`/`decompress()`, `server_enable_compression`). Needs `Lib/compress`. |
 | `event` | ✅ | Event-driven reactive server (`reactive_server`). Needs `Lib/event`. |
 | `mime` | ✅ | Static file serving (`serve_static`, `mw_serve_static`). Needs `Lib/mime`. |
+| `json` | ✅ | JSON body helpers (`ctx_body_json`, `ctx_json_map`). Needs `Lib/json`. |
+| `mustache` | ✅ | View rendering (`ctx_render`, `ctx_render_file`). Needs `Lib/mustache`. |
 
 `crypto`, `url`, and `tls` stay required: WebSocket handshakes need SHA-1, clients need URL parsing, and TLS paths are woven through the server/client cores.
 
@@ -141,23 +157,29 @@ alya test --no-default-features
 ```alya
 import "http" as http
 
+function get_user(ctx)
+    let uid = http::ctx_param(ctx, "id")
+    return http::ctx_json_map(ctx, {"userId": uid}, 200)
+end
+
 function main()
     let app = http::router()
 
-    # Route with path parameter
-    app.get("/users/:id", "get_user")
+    # Handler-function route with path parameter
+    http::router_on_get(app, "/users/:id", get_user)
 
-    # JSON API response route
-    app.post("/api/echo", "post_echo")
-
-    # Start listening on port 8080 with compression enabled
     let srv = http::server(8080, "127.0.0.1", app)
-    http::server_enable_compression(srv, 256)
-    say "Server running on http://127.0.0.1:8080"
+    http::server_start(srv)
+    http::server_serve(srv, 1)
 end
 
 main()
 ```
+
+> [!NOTE]
+> `router_get/post/...` accept legacy string action names for match-only flows;
+> `router_on` / `router_on_get` / ... register real handler functions invoked
+> by `router_dispatch` (sync) or the reactive server.
 
 ### 2. Response Compression & Pre-compressed Static Assets
 
@@ -217,6 +239,29 @@ end
 main()
 ```
 
+### 5. Protection & Keep-Alive
+
+```alya
+import "http" as http
+
+function main()
+    let app = http::router()
+    let srv = http::server(8080, "127.0.0.1", app)
+
+    # Trace every response, require a token, throttle clients,
+    # and reuse connections
+    http::server_enable_request_id(srv, 1)
+    http::server_enable_bearer_auth(srv, "tok-123")
+    http::server_enable_rate_limit(srv, 100, 60000)
+    http::server_enable_keep_alive(srv, 1, 100)
+
+    http::server_start(srv)
+    http::server_serve(srv, 1)
+end
+
+main()
+```
+
 ---
 
 ## 📖 API Reference
@@ -267,6 +312,53 @@ main()
 | `router_patch(r, pattern, handler)` | `pattern: string, handler: string` | Registers a PATCH route handler |
 | `router_query(r, pattern, handler)` | `pattern: string, handler: string` | Registers a QUERY route handler |
 | `router_group_add(r, prefix, ...)` | `prefix: string, ...` | Registers a route under a group prefix |
+| `router_on(r, method, pattern, handler)` | `method, pattern: string, handler: fn` | Registers a handler-function route for any method |
+| `router_on_get/post/put/delete/patch/head/options/query/any(r, pattern, handler)` | `pattern: string, handler: fn` | Per-method handler-function shortcuts |
+| `router_group_on(r, prefix, method, pattern, handler)` | `prefix: string, ...` | Registers a handler-function route under a group prefix |
+| `group_on(g, method, pattern, handler)` | `method, pattern: string, handler: fn` | Registers a handler-function route in a group |
+
+### Handler Dispatch API
+
+| Function | Parameters | Description |
+|---|---|---|
+| `router_dispatch_match(m, ctx)` | `m: RouteMatch, ctx: HttpContext` | Invokes the matched handler function; returns 1 when invoked, 0 otherwise (miss, abort, legacy string action) |
+| `router_dispatch(r, method, path, ctx)` | `r: HttpRouter, ...` | Matches, injects params, and dispatches; returns the `RouteMatch` |
+
+### Sync Serve & Keep-Alive API
+
+| Function | Parameters | Description |
+|---|---|---|
+| `server_enable_keep_alive(server, enabled, max_requests)` | `server: HttpServer, ...` | Enables HTTP/1.1 connection reuse (plaintext only) |
+| `server_should_keep_alive(server, ctx)` | `server: HttpServer, ctx` | Returns 1 when the connection should stay open |
+| `server_read_request(sock, timeout_ms)` | `sock: int, timeout_ms: int` | Reads one request from a connected socket (reuse primitive) |
+| `server_serve_once(server, timeout_ms, max_requests, on_request)` | `server: HttpServer, ...` | Serves one connection end-to-end; returns request count |
+| `server_serve(server, max_conns, ...)` | `server: HttpServer, ...` | Serves up to `max_conns` connections; returns total requests |
+
+### Auth & Guards API
+
+| Function | Parameters | Description |
+|---|---|---|
+| `mw_require_basic(ctx, user, pass, realm)` | `ctx: HttpContext, ...` | Enforces HTTP Basic auth; 401 + abort on failure |
+| `mw_require_bearer(ctx, token)` | `ctx: HttpContext, token: string` | Enforces Bearer auth; 401 + abort on failure |
+| `auth_basic_credentials(ctx)` | `ctx: HttpContext` | Parses Basic credentials into `{user, pass}` or null |
+| `auth_bearer_token(ctx)` | `ctx: HttpContext` | Extracts the Bearer token or `""` |
+| `server_enable_basic_auth(server, user, pass)` | `server: HttpServer, ...` | Enforces Basic auth in `server_process` |
+| `server_enable_bearer_auth(server, token)` | `server: HttpServer, ...` | Enforces Bearer auth in `server_process` |
+| `rate_limit_new(limit, window_ms)` | `limit: int, window_ms: int` | Creates a fixed-window `RateLimiter` |
+| `rate_limit_check(limiter, key)` | `limiter: RateLimiter, key: string` | Records a hit; 1 allowed, 0 denied |
+| `mw_apply_rate_limit(ctx, limiter, key)` | `ctx: HttpContext, ...` | Enforces the limiter; 429 + `Retry-After` on denial |
+| `server_enable_rate_limit(server, limit, window_ms)` | `server: HttpServer, ...` | Enforces rate limiting in `server_process` |
+| `mw_request_id(ctx, header)` | `ctx: HttpContext, ...` | Echoes/generates `X-Request-ID`; mirrors to response |
+| `server_enable_request_id(server, enabled)` | `server: HttpServer, ...` | Tags every response with a request ID |
+
+### JSON & View API (optional features)
+
+| Function | Parameters | Description |
+|---|---|---|
+| `ctx_body_json(ctx)` | `ctx: HttpContext` | Parses the request body as JSON; null when empty/invalid (`json` feature) |
+| `ctx_json_map(ctx, m, status)` | `ctx: HttpContext, m: map, ...` | Sends a flat string map as a quoted JSON object (`json` feature) |
+| `ctx_render(ctx, template, data, status)` | `ctx: HttpContext, ...` | Renders a Mustache template string as HTML (`mustache` feature) |
+| `ctx_render_file(ctx, path, data, status)` | `ctx: HttpContext, ...` | Renders a Mustache template file as HTML (`mustache` feature) |
 
 ### Reactive Server API
 
@@ -347,7 +439,7 @@ main()
 
 ## 🧪 Running Tests & Benchmarks
 
-Run all 14 test suites using `alya`:
+Run all 28 test suites using `alya`:
 
 ```bash
 alya test

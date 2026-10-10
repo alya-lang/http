@@ -56,9 +56,18 @@ pub function route_new(method, pattern: string, action)
     return HttpRoute {
         method: m,
         action: action,
+        handler: null,
         pattern: pattern,
         segments: segs
     }
+end
+
+## Creates a new HttpRoute definition struct bound to a handler function.
+## The handler is invoked with the matched `HttpContext` by `router_dispatch`.
+pub function route_new_handler(method, pattern: string, handler)
+    let rt = route_new(method, pattern, null)
+    rt.handler = handler
+    return rt
 end
 
 ## Matches a request path against a route pattern's segments.

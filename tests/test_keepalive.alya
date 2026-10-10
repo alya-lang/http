@@ -1,0 +1,92 @@
+## Test suite for keep-alive connection reuse and the sync serve loop
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+import "std/test"
+import "std/net" as net
+import "../src/lib.alya" as http
+
+function ka_handler(ctx)
+    return http::ctx_text(ctx, "kept:" + http::ctx_param(ctx, "n"), 200)
+end
+
+function main()
+    test_suite("HTTP Keep-Alive Tests")
+    let r = runner_new()
+
+    # 1. Keep-alive decision matrix (pure, no sockets)
+    let rt = http::router()
+    let plain = http::server_new(19880, "127.0.0.1", rt)
+    let ctx_plain = http::ctx_new(http::request_create("GET", "/a"))
+    runner_assert_eq(r, http::server_should_keep_alive(plain, ctx_plain), 0, "disabled by default")
+    http::server_enable_keep_alive(plain, 1, 10)
+    runner_assert_eq(r, http::server_should_keep_alive(plain, ctx_plain), 1, "http/1.1 default keeps alive")
+    let req_close = http::request_create("GET", "/a")
+    http::header_set(req_close.headers, "Connection", "close")
+    let ctx_close = http::ctx_new(req_close)
+    runner_assert_eq(r, http::server_should_keep_alive(plain, ctx_close), 0, "explicit close wins")
+
+    # 2. Live reuse: two sequential requests over one socket
+    let rt2 = http::router()
+    http::router_on(rt2, "GET", "/n/:n", ka_handler)
+    let srv = http::server_new(19881, "127.0.0.1", rt2)
+    http::server_enable_keep_alive(srv, 1, 10)
+    http::server_start(srv)
+    runner_assert_eq(r, srv.running, 1, "server listening")
+
+    let sock = net::tcp_connect("127.0.0.1", 19881)
+    runner_assert(r, sock >= 0, "client connected")
+    net::tcp_set_timeout(sock, 5000)
+
+    net::tcp_send(sock, "GET /n/1 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\n\r\n")
+    let ctx_a = http::server_accept(srv, 3000)
+    runner_assert(r, ctx_a is not null, "first request accepted")
+    let m_a = http::server_process(srv, ctx_a)
+    runner_assert_eq(r, m_a.found, 1, "first request routed")
+    http::router_dispatch_match(m_a, ctx_a)
+    http::server_send(srv, ctx_a)
+    runner_assert(r, ctx_a.client_sock >= 0, "socket stays open after keep-alive send")
+    runner_assert_str_eq(r, http::header_get(ctx_a.res.headers, "Connection"), "keep-alive", "keep-alive response header")
+
+    let resp1 = ""
+    if net::tcp_poll(sock, 3000) == true
+        resp1 = net::tcp_recv(sock, 4096)
+    end
+    runner_assert_eq(r, index_of(resp1, "kept:1") >= 0, 1, "first body received")
+
+    net::tcp_send(sock, "GET /n/2 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+    let ctx_b = http::server_read_request(ctx_a.client_sock, 3000)
+    runner_assert(r, ctx_b is not null, "second request read on same socket")
+    let m_b = http::server_process(srv, ctx_b)
+    http::router_dispatch_match(m_b, ctx_b)
+    http::server_send(srv, ctx_b)
+    runner_assert_eq(r, ctx_b.client_sock, -1, "close request shuts the socket")
+    let resp2 = ""
+    if net::tcp_poll(sock, 3000) == true
+        resp2 = net::tcp_recv(sock, 4096)
+    end
+    net::tcp_close(sock)
+    runner_assert_eq(r, index_of(resp2, "kept:2") >= 0, 1, "second body received")
+    http::server_close(srv)
+
+    # 3. server_serve_once handles a full accept/process/send cycle
+    let srv2 = http::server_new(19883, "127.0.0.1", rt2)
+    http::server_start(srv2)
+    let sock2 = net::tcp_connect("127.0.0.1", 19883)
+    net::tcp_set_timeout(sock2, 5000)
+    net::tcp_send(sock2, "GET /n/7 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+    let served = http::server_serve(srv2, 1, 3000, 10)
+    runner_assert_eq(r, served, 1, "serve handled one request")
+    let resp3 = ""
+    if net::tcp_poll(sock2, 3000) == true
+        resp3 = net::tcp_recv(sock2, 4096)
+    end
+    net::tcp_close(sock2)
+    runner_assert_eq(r, index_of(resp3, "kept:7") >= 0, 1, "served body received")
+    http::server_close(srv2)
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

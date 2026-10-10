@@ -1,0 +1,75 @@
+## Test suite for handler-function routes and dispatch
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+import "std/test"
+import "../src/lib.alya" as http
+
+function dispatch_hello(ctx)
+    return http::ctx_text(ctx, "hello fn", 200)
+end
+
+function dispatch_user(ctx)
+    let uid = http::ctx_param(ctx, "id")
+    return http::ctx_text(ctx, "user:" + uid, 200)
+end
+
+function main()
+    test_suite("HTTP Handler Dispatch Tests")
+    let r = runner_new()
+
+    let rt = http::router()
+    http::router_on_get(rt, "/hello", dispatch_hello)
+    http::router_on(rt, "POST", "/users/:id", dispatch_user)
+    let g = http::group_new(rt, "/api")
+    http::group_on(g, "GET", "/status", dispatch_hello)
+    # Legacy string action stays matchable but is never invoked
+    http::router_get(rt, "/legacy", "action_legacy")
+
+    # 1. Handler route matches and carries the function
+    let m1 = http::router_match(rt, "GET", "/hello")
+    runner_assert_eq(r, m1.found, 1, "handler route found")
+    runner_assert(r, m1.handler is not null, "match carries handler")
+
+    # 2. Dispatch invokes the handler on the context
+    let ctx1 = http::ctx_new(http::request_create("GET", "/hello"))
+    let d1 = http::router_dispatch_match(m1, ctx1)
+    runner_assert_eq(r, d1, 1, "dispatch invoked handler")
+    runner_assert_str_eq(r, ctx1.res.body, "hello fn", "handler wrote body")
+
+    # 3. router_dispatch matches, injects params, and invokes
+    let ctx2 = http::ctx_new(http::request_create("POST", "/users/42"))
+    let m2 = http::router_dispatch(rt, "POST", "/users/42", ctx2)
+    runner_assert_eq(r, m2.found, 1, "router_dispatch found")
+    runner_assert_str_eq(r, ctx2.res.body, "user:42", "params injected before invoke")
+
+    # 4. Group handler route dispatches
+    let ctx3 = http::ctx_new(http::request_create("GET", "/api/status"))
+    let m3 = http::router_dispatch(rt, "GET", "/api/status", ctx3)
+    runner_assert_eq(r, m3.found, 1, "group handler found")
+    runner_assert_str_eq(r, ctx3.res.body, "hello fn", "group handler invoked")
+
+    # 5. Legacy string actions are matched but never invoked
+    let m4 = http::router_match(rt, "GET", "/legacy")
+    runner_assert_eq(r, m4.found, 1, "legacy route found")
+    runner_assert_str_eq(r, m4.action, "action_legacy", "legacy action preserved")
+    let ctx4 = http::ctx_new(http::request_create("GET", "/legacy"))
+    let d4 = http::router_dispatch_match(m4, ctx4)
+    runner_assert_eq(r, d4, 0, "legacy action not invoked")
+    runner_assert_str_eq(r, ctx4.res.body, "", "legacy dispatch leaves body")
+
+    # 6. Misses and aborts never invoke
+    let ctx5 = http::ctx_new(http::request_create("GET", "/missing"))
+    let m5 = http::router_dispatch(rt, "GET", "/missing", ctx5)
+    runner_assert_eq(r, m5.found, 0, "missing route not found")
+    runner_assert_eq(r, m5.status, 404, "missing status 404")
+    let ctx6 = http::ctx_new(http::request_create("GET", "/hello"))
+    http::ctx_abort(ctx6)
+    let d6 = http::router_dispatch_match(m1, ctx6)
+    runner_assert_eq(r, d6, 0, "aborted context not dispatched")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

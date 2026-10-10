@@ -121,10 +121,14 @@ pub function _on_reactive_client_data(client_stream: TcpStream, chunk: string)
                     state.is_websocket = true
                     state.ws_conn = ws
 
-                    # Dispatch WebSocket handler
+                    # Dispatch WebSocket handler (function handlers first, legacy actions after)
                     let ws_handled = false
                     let m = router_match(state.server.router, req.method, req.path)
-                    if m.found == true and m.action is not null
+                    if m.found == true and m.handler is not null
+                        let h = m.handler
+                        h(ws, req)
+                        ws_handled = true
+                    elif m.found == true and m.action is not null
                         let act = m.action
                         act(ws, req)
                         ws_handled = true
@@ -174,8 +178,12 @@ pub function _on_reactive_client_data(client_stream: TcpStream, chunk: string)
                 # Apply server middlewares and router matching
                 let m = server_process(state.server, ctx)
 
-                # Dispatch route action or global request callback
-                if m.found == true and m.action is not null
+                # Dispatch route handler (function handlers first, legacy actions after)
+                # or global request callback
+                if m.found == true and m.handler is not null
+                    let h = m.handler
+                    h(ctx)
+                elif m.found == true and m.action is not null
                     let act = m.action
                     act(ctx)
                 elif state.on_request_cb is not null

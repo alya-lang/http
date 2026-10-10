@@ -67,6 +67,61 @@ pub function router_any(r, pattern: string, action)
     return router_add(r, "ANY", pattern, action)
 end
 
+## Adds a new route rule bound to a handler function to the router.
+pub function router_on(r, method, pattern: string, handler)
+    if r is null
+        return null
+    end
+    let route = route_new_handler(method, pattern, handler)
+    push(r.routes, route)
+    return r
+end
+
+## Registers a GET route with a handler function.
+pub function router_on_get(r, pattern: string, handler)
+    return router_on(r, "GET", pattern, handler)
+end
+
+## Registers a POST route with a handler function.
+pub function router_on_post(r, pattern: string, handler)
+    return router_on(r, "POST", pattern, handler)
+end
+
+## Registers a PUT route with a handler function.
+pub function router_on_put(r, pattern: string, handler)
+    return router_on(r, "PUT", pattern, handler)
+end
+
+## Registers a DELETE route with a handler function.
+pub function router_on_delete(r, pattern: string, handler)
+    return router_on(r, "DELETE", pattern, handler)
+end
+
+## Registers a PATCH route with a handler function.
+pub function router_on_patch(r, pattern: string, handler)
+    return router_on(r, "PATCH", pattern, handler)
+end
+
+## Registers a HEAD route with a handler function.
+pub function router_on_head(r, pattern: string, handler)
+    return router_on(r, "HEAD", pattern, handler)
+end
+
+## Registers an OPTIONS route with a handler function.
+pub function router_on_options(r, pattern: string, handler)
+    return router_on(r, "OPTIONS", pattern, handler)
+end
+
+## Registers a QUERY route with a handler function (IETF safe method with request body).
+pub function router_on_query(r, pattern: string, handler)
+    return router_on(r, "QUERY", pattern, handler)
+end
+
+## Registers a route matching ANY HTTP method with a handler function.
+pub function router_on_any(r, pattern: string, handler)
+    return router_on(r, "ANY", pattern, handler)
+end
+
 ## Joins prefix and path pattern cleanly (e.g. "/api" + "/users/:id" -> "/api/users/:id").
 pub function _router_join_prefix(prefix: string, pattern: string)
     if prefix is null or prefix == "" or prefix == "/"
@@ -92,6 +147,12 @@ pub function router_group_add(r, prefix: string, method, pattern: string, action
     return router_add(r, method, full_pattern, action)
 end
 
+## Adds a handler-function route under a group prefix.
+pub function router_group_on(r, prefix: string, method, pattern: string, handler)
+    let full_pattern = _router_join_prefix(prefix, pattern)
+    return router_on(r, method, full_pattern, handler)
+end
+
 ## Helper to check if array contains item.
 pub function _arr_has(arr, item)
     let i = 0
@@ -108,7 +169,7 @@ end
 ## Returns a RouteMatch struct.
 pub function router_match(r, method, path: string)
     if r is null
-        return RouteMatch { found: 0, action: "not_found", route: "", params: {}, status: 404, allowed_methods: [] }
+        return RouteMatch { found: 0, action: "not_found", handler: null, route: "", params: {}, status: 404, allowed_methods: [] }
     end
 
     let raw_m = upper(trim(method))
@@ -133,7 +194,7 @@ pub function router_match(r, method, path: string)
         let res = route_match_segments(rt.segments, req_segs)
         if res["matched"] == true
             if rt.method == req_method or rt.method == "ANY" or rt.method == "*"
-                return RouteMatch { found: 1, action: rt.action, route: rt.pattern, params: res["params"], status: 200, allowed_methods: [] }
+                return RouteMatch { found: 1, action: rt.action, handler: rt.handler, route: rt.pattern, params: res["params"], status: 200, allowed_methods: [] }
             else
                 if _arr_has(allowed_methods, rt.method) == false
                     push(allowed_methods, rt.method)
@@ -145,9 +206,9 @@ pub function router_match(r, method, path: string)
 
     # If path matched routes for other methods, return 405 Method Not Allowed
     if len(allowed_methods) > 0
-        return RouteMatch { found: 0, action: "method_not_allowed", route: "", params: {}, status: 405, allowed_methods: allowed_methods }
+        return RouteMatch { found: 0, action: "method_not_allowed", handler: null, route: "", params: {}, status: 405, allowed_methods: allowed_methods }
     end
 
     # Otherwise return 404 Not Found
-    return RouteMatch { found: 0, action: r.not_found_action, route: "", params: {}, status: 404, allowed_methods: [] }
+    return RouteMatch { found: 0, action: r.not_found_action, handler: null, route: "", params: {}, status: 404, allowed_methods: [] }
 end

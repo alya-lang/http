@@ -114,7 +114,8 @@ end
 ##
 ## ### Fields
 ## - `found`: `1` on match, `0` otherwise.
-## - `action`: Route action value.
+## - `action`: Route action value (legacy string name; null when handler-based).
+## - `handler`: Route handler function value (or null for legacy string actions).
 ## - `route`: Matched pattern string.
 ## - `params`: Captured parameter map.
 ## - `status`: Match status integer.
@@ -122,6 +123,7 @@ end
 pub struct RouteMatch
     found: int,
     action,
+    handler,
     route: string,
     params: map,
     status: int,
@@ -148,12 +150,14 @@ end
 ##
 ## ### Fields
 ## - `method`: Method value (string or `HttpMethod`).
-## - `action`: Handler action value.
+## - `action`: Handler action value (legacy string name; null when handler-based).
+## - `handler`: Handler function value invoked with the `HttpContext` (or null).
 ## - `pattern`: Route pattern string.
 ## - `segments`: Pattern segment array.
 pub struct HttpRoute
     method,
     action,
+    handler,
     pattern: string,
     segments: array
 end

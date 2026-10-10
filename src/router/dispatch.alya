@@ -1,0 +1,42 @@
+## HTTP Router Handler Dispatch.
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "../types.alya"
+import "./router.alya"
+
+## Invokes the handler function carried by a RouteMatch on the given context.
+## Returns 1 when a handler was invoked, 0 otherwise (no match, aborted
+## context, or legacy string action without a handler function).
+## Legacy string actions are never invoked: calling a string value as a
+## function crashes the runtime, so dispatch only trusts the `handler`
+## field populated by `router_on` and its per-method shortcuts.
+pub function router_dispatch_match(m: RouteMatch, ctx: HttpContext) -> int
+    if m is null or ctx is null
+        return 0
+    end
+    if m.found != true
+        return 0
+    end
+    if ctx.aborted == true
+        return 0
+    end
+    if m.handler is null
+        return 0
+    end
+    let h = m.handler
+    h(ctx)
+    return 1
+end
+
+## Matches a request against the router, injects captured params into the
+## context request, and invokes the matched handler function when present.
+## Returns the RouteMatch so callers can inspect status for 404/405 handling.
+pub function router_dispatch(r: HttpRouter, method, path: string, ctx: HttpContext) -> RouteMatch
+    let m = router_match(r, method, path)
+    if m.found == true and ctx is not null and ctx.req is not null
+        let req = ctx.req
+        req.params = m.params
+    end
+    router_dispatch_match(m, ctx)
+    return m
+end

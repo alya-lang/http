@@ -1,0 +1,37 @@
+## HTTP Request ID Middleware (tracing correlation).
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "../types.alya"
+import "../core/headers.alya"
+
+let _request_id_seq = 0
+
+## Ensures the context carries a correlation ID: echoes the incoming
+## `X-Request-ID` (or custom header) when present, otherwise generates
+## `req-<clock_ms>-<seq>`. The ID is mirrored to the response headers,
+## stored under `ctx.data["request_id"]`, and returned.
+pub function mw_request_id(ctx: HttpContext, header_name: string = "X-Request-ID") -> string
+    if ctx is null
+        return ""
+    end
+    if header_name is null or header_name == ""
+        header_name = "X-Request-ID"
+    end
+    let incoming = ""
+    if ctx.req is not null
+        incoming = header_get(ctx.req.headers, header_name, "")
+    end
+    let id = incoming
+    if id == ""
+        _request_id_seq += 1
+        id = "req-" + str(clock_ms()) + "-" + str(_request_id_seq)
+    end
+    if ctx.res is not null
+        header_set(ctx.res.headers, header_name, id)
+    end
+    if ctx.data is null
+        ctx.data = {}
+    end
+    ctx.data["request_id"] = id
+    return id
+end

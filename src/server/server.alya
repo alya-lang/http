@@ -12,8 +12,12 @@ import "../types.alya"
 import "../core/protocol.alya"
 import "../core/headers.alya"
 import "../router/router.alya"
+import "../router/dispatch.alya"
 import "../middleware/cors.alya"
 import "../middleware/logger.alya"
+import "../middleware/auth.alya"
+import "../middleware/rate_limit.alya"
+import "../middleware/request_id.alya"
 @cfg(feature = "mime")
 import "../middleware/static.alya"
 @cfg(feature = "compress")
@@ -41,7 +45,17 @@ pub function server_new(port: int = 8080, host: string = "0.0.0.0", router = nul
             "static_prefix": "",
             "static_dir": "",
             "compression_enabled": 0,
-            "compression_config": null
+            "compression_config": null,
+            "keep_alive_enabled": 0,
+            "keep_alive_max": 100,
+            "request_id_enabled": 0,
+            "auth_enabled": 0,
+            "auth_kind": "",
+            "auth_user": "",
+            "auth_pass": "",
+            "auth_token": "",
+            "rate_limit_enabled": 0,
+            "rate_limiter": null
         },
         loop: null,
         tcp_server: null
@@ -76,6 +90,83 @@ end
 pub function server_enable_compression(server, min_length: int = 256)
     server.options["compression_enabled"] = 1
     server.options["compression_config"] = compression_config_new(min_length)
+    return server
+end
+
+## Enables HTTP/1.1 keep-alive on the server: responses to clients that did
+## not ask for `Connection: close` keep the socket open for reuse.
+## `max_requests` caps pipelined sequential requests per connection in
+## `server_serve_once` (0 means unlimited). TLS connections always close.
+pub function server_enable_keep_alive(server, enabled: int = 1, max_requests: int = 100)
+    if server is null
+        return server
+    end
+    server.options["keep_alive_enabled"] = enabled
+    server.options["keep_alive_max"] = max_requests
+    return server
+end
+
+## Returns 1 when the connection behind `ctx` should be kept open:
+## keep-alive is enabled, the channel is plaintext, and the client did
+## not send `Connection: close`.
+pub function server_should_keep_alive(server, ctx: HttpContext) -> int
+    if server is null or ctx is null or ctx.req is null
+        return 0
+    end
+    if server.options["keep_alive_enabled"] != true
+        return 0
+    end
+    if ctx.data is not null and ctx.data["tls_enabled"] == true
+        return 0
+    end
+    let conn = lower(header_get(ctx.req.headers, "connection", ""))
+    if conn == "close"
+        return 0
+    end
+    return 1
+end
+
+## Enables request ID tracing on the server (mirrors/generates
+## `X-Request-ID` per request via `mw_request_id`).
+pub function server_enable_request_id(server, enabled: int = 1)
+    if server is null
+        return server
+    end
+    server.options["request_id_enabled"] = enabled
+    return server
+end
+
+## Enables HTTP Basic authentication enforcement in `server_process`.
+pub function server_enable_basic_auth(server, username: string, password: string)
+    if server is null
+        return server
+    end
+    server.options["auth_enabled"] = 1
+    server.options["auth_kind"] = "basic"
+    server.options["auth_user"] = username
+    server.options["auth_pass"] = password
+    return server
+end
+
+## Enables Bearer token authentication enforcement in `server_process`.
+pub function server_enable_bearer_auth(server, token: string)
+    if server is null
+        return server
+    end
+    server.options["auth_enabled"] = 1
+    server.options["auth_kind"] = "bearer"
+    server.options["auth_token"] = token
+    return server
+end
+
+## Enables fixed-window rate limiting in `server_process`, keyed by client
+## remote address (`limit` hits per `window_ms` milliseconds).
+pub function server_enable_rate_limit(server, limit: int = 100, window_ms: int = 60000)
+    if server is null
+        return server
+    end
+    server.options["rate_limit_enabled"] = 1
+    server.options["rate_limiter"] = rate_limit_new(limit, window_ms)
     return server
 end
 
@@ -207,6 +298,24 @@ pub function server_accept(server, timeout_ms: int = 1000)
     # Set 5-second socket timeout for reading the request
     net::tcp_set_timeout(client_sock, 5000)
 
+    let ctx = server_read_request(client_sock, 5000)
+    if ctx is null
+        net::tcp_close(client_sock)
+        return null
+    end
+    return ctx
+end
+
+## Reads one HTTP request from an already-connected client socket and
+## wraps it in an HttpContext, or null when the peer sent nothing (closed).
+## The socket is left open: the caller owns closing it. This is the reuse
+## primitive behind keep-alive (`server_serve_once` loops on it).
+pub function server_read_request(client_sock: int, timeout_ms: int = 5000)
+    if client_sock < 0
+        return null
+    end
+    net::tcp_set_timeout(client_sock, timeout_ms)
+
     # Read incoming request bytes (arrays preserve binary bodies)
     let raw_req = []
     while 1
@@ -231,7 +340,6 @@ pub function server_accept(server, timeout_ms: int = 1000)
     end
 
     if len(raw_req) == 0
-        net::tcp_close(client_sock)
         return null
     end
 
@@ -279,18 +387,50 @@ pub function server_accept(server, timeout_ms: int = 1000)
     return context_create(req, res, client_sock)
 end
 
-# Processes common middlewares (CORS, static files) and matches route on HttpContext
+# Processes common middlewares (request ID, CORS, auth, rate limit,
+# static files) and matches route on HttpContext
 ## Returns the RouteMatch result
 pub function server_process(server, ctx: HttpContext)
     if server is null or ctx is null
-        return RouteMatch { found: 0, action: "not_found", route: "", params: {}, status: 404, allowed_methods: [] }
+        return RouteMatch { found: 0, action: "not_found", handler: null, route: "", params: {}, status: 404, allowed_methods: [] }
+    end
+
+    # Trace correlation first so even rejected requests carry an ID
+    if server.options["request_id_enabled"] == true
+        mw_request_id(ctx)
     end
 
     # Apply CORS middleware if enabled
     if server.options["cors_enabled"] == true
         let preflight = mw_apply_cors(ctx, server.options["cors_config"])
         if preflight == true
-            return RouteMatch { found: 1, action: "cors_preflight", route: "", params: {}, status: 204, allowed_methods: [] }
+            return RouteMatch { found: 1, action: "cors_preflight", handler: null, route: "", params: {}, status: 204, allowed_methods: [] }
+        end
+    end
+
+    # Enforce authentication when enabled (preflight already returned above)
+    if server.options["auth_enabled"] == true and ctx.aborted != true
+        let authed = 0
+        when server.options["auth_kind"]
+            is "bearer" then authed = mw_require_bearer(ctx, server.options["auth_token"])
+            else authed = mw_require_basic(ctx, server.options["auth_user"], server.options["auth_pass"])
+        end
+        if authed == false
+            return RouteMatch { found: 0, action: "unauthorized", handler: null, route: "", params: {}, status: 401, allowed_methods: [] }
+        end
+    end
+
+    # Enforce rate limiting when enabled
+    if server.options["rate_limit_enabled"] == true and ctx.aborted != true
+        let limiter = server.options["rate_limiter"]
+        if limiter is not null
+            let rl_key = ""
+            if ctx.req is not null
+                rl_key = ctx.req.remote_addr
+            end
+            if mw_apply_rate_limit(ctx, limiter, rl_key) == false
+                return RouteMatch { found: 0, action: "rate_limited", handler: null, route: "", params: {}, status: 429, allowed_methods: [] }
+            end
         end
     end
 
@@ -301,7 +441,7 @@ pub function server_process(server, ctx: HttpContext)
         let dir = server.options["static_dir"]
         let served = mw_serve_static(ctx, prefix, dir)
         if served == true
-            return RouteMatch { found: 1, action: "static_file", route: "", params: {}, status: 200, allowed_methods: [] }
+            return RouteMatch { found: 1, action: "static_file", handler: null, route: "", params: {}, status: 200, allowed_methods: [] }
         end
     end
 
@@ -326,8 +466,10 @@ pub function server_process(server, ctx: HttpContext)
     return m
 end
 
-## Serializes the response in HttpContext, transmits over TCP, and closes client connection.
-## TLS contexts send through the encrypted channel and close the TLS session.
+## Serializes the response in HttpContext and transmits over TCP.
+## Keeps the client connection open when `server_should_keep_alive` holds
+## (plaintext + enabled + client did not ask for close); otherwise closes it.
+## TLS contexts send through the encrypted channel and always close.
 pub function server_send(server, ctx)
     if ctx is null or ctx.client_sock < 0
         return false
@@ -344,6 +486,8 @@ pub function server_send(server, ctx)
         mw_log_context(ctx)
     end
 
+    let keep = server_should_keep_alive(server, ctx)
+
     if ctx.data is not null and ctx.data["tls_enabled"] == true and ctx.data["tls_ctx"] is not null
         let tls_ctx = ctx.data["tls_ctx"]
         let wire = http_format_response(ctx.res)
@@ -354,6 +498,12 @@ pub function server_send(server, ctx)
             return false
         end
         return true
+    end
+
+    if keep == true
+        header_set(ctx.res.headers, "Connection", "keep-alive")
+    elif header_has(ctx.res.headers, "connection") == false
+        header_set(ctx.res.headers, "Connection", "close")
     end
 
     # Binary responses (explicit body_bytes) travel as bytes; everything else
@@ -367,9 +517,79 @@ pub function server_send(server, ctx)
     else
         net::tcp_send(ctx.client_sock, http_format_response(ctx.res))
     end
+    if keep == true
+        return true
+    end
     net::tcp_close(ctx.client_sock)
     ctx.client_sock = -1
     return true
+end
+
+## Accepts one connection and serves sequential requests on it until the
+## client closes, `max_requests` is reached, or no handler keeps it open.
+## Each request runs `server_process`, then the matched handler function
+## (`router_dispatch_match`), falling back to `on_request` for unmatched
+## paths. Returns the number of served requests. The listener must be
+## started with `server_start` first. Pipelined (unread-ahead) bytes are
+## not supported: clients must wait for each response (sequential keep-alive).
+pub function server_serve_once(server, timeout_ms: int = 1000, max_requests: int = 100, on_request = null) -> int
+    if server is null or server.running == 0 or server.server_sock < 0
+        return 0
+    end
+    let ready = net::tcp_poll(server.server_sock, timeout_ms)
+    if ready != true
+        return 0
+    end
+    let client_sock = net::tcp_accept(server.server_sock)
+    if client_sock < 0
+        return 0
+    end
+    net::tcp_set_timeout(client_sock, 5000)
+    let served = 0
+    let sock = client_sock
+    let ctx = server_read_request(sock, 5000)
+    while ctx is not null
+        let m = server_process(server, ctx)
+        if ctx.aborted != true and m.found == true
+            router_dispatch_match(m, ctx)
+        elif ctx.aborted != true and m.found == false and on_request is not null
+            on_request(ctx)
+        end
+        server_send(server, ctx)
+        served += 1
+        sock = ctx.client_sock
+        if sock < 0
+            break
+        end
+        if max_requests > 0 and served >= max_requests
+            break
+        end
+        ctx = server_read_request(sock, 5000)
+    end
+    if sock >= 0
+        net::tcp_close(sock)
+    end
+    return served
+end
+
+## Serves up to `max_connections` connections via `server_serve_once`
+## (`max_connections <= 0` loops forever). Returns total served requests.
+pub function server_serve(server, max_connections: int = 1, timeout_ms: int = 1000, max_requests: int = 100, on_request = null) -> int
+    if server is null
+        return 0
+    end
+    let total = 0
+    if max_connections <= 0
+        while 1
+            total += server_serve_once(server, timeout_ms, max_requests, on_request)
+        end
+    end
+    let done = 0
+    while done < max_connections
+        total += server_serve_once(server, timeout_ms, max_requests, on_request)
+        done += 1
+    end
+    return total
 end
 
 ## Stops the HTTP server and releases socket resources

@@ -1,0 +1,67 @@
+## Test suite for HTTP Basic/Bearer auth middleware and server enforcement
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+import "std/test"
+import "../src/lib.alya" as http
+
+function main()
+    test_suite("HTTP Auth Middleware Tests")
+    let r = runner_new()
+
+    # 1. Basic credentials extraction
+    let req1 = http::request_create("GET", "/private")
+    http::header_set(req1.headers, "Authorization", "Basic dXNlcjpwYXNz")
+    let ctx1 = http::ctx_new(req1)
+    let creds = http::auth_basic_credentials(ctx1)
+    runner_assert_str_eq(r, creds["user"], "user", "basic user parsed")
+    runner_assert_str_eq(r, creds["pass"], "pass", "basic pass parsed")
+
+    # 2. Missing / malformed credentials yield null
+    let ctx2 = http::ctx_new(http::request_create("GET", "/private"))
+    runner_assert(r, http::auth_basic_credentials(ctx2) is null, "no header yields null")
+    let req_bad = http::request_create("GET", "/private")
+    http::header_set(req_bad.headers, "Authorization", "Basic !!!not-base64!!!")
+    let ctx_bad = http::ctx_new(req_bad)
+    runner_assert(r, http::auth_basic_credentials(ctx_bad) is null, "bad payload yields null")
+
+    # 3. Basic gate accepts and rejects
+    let ok_ctx = http::ctx_new(http::request_create("GET", "/x"))
+    http::header_set(ok_ctx.req.headers, "Authorization", "Basic dXNlcjpwYXNz")
+    runner_assert_eq(r, http::mw_require_basic(ok_ctx, "user", "pass"), 1, "correct basic accepted")
+    let no_ctx = http::ctx_new(http::request_create("GET", "/x"))
+    runner_assert_eq(r, http::mw_require_basic(no_ctx, "user", "pass"), 0, "missing basic rejected")
+    runner_assert_eq(r, no_ctx.res.status_code, 401, "basic reject status 401")
+    runner_assert_eq(r, no_ctx.aborted, 1, "basic reject aborts")
+    runner_assert_str_eq(r, http::header_get(no_ctx.res.headers, "WWW-Authenticate"), "Basic realm=\"Alya\"", "basic challenge header")
+
+    # 4. Bearer gate accepts and rejects
+    let b_ctx = http::ctx_new(http::request_create("GET", "/x"))
+    http::header_set(b_ctx.req.headers, "Authorization", "Bearer tok-123")
+    runner_assert_str_eq(r, http::auth_bearer_token(b_ctx), "tok-123", "bearer token parsed")
+    runner_assert_eq(r, http::mw_require_bearer(b_ctx, "tok-123"), 1, "correct bearer accepted")
+    let b_no = http::ctx_new(http::request_create("GET", "/x"))
+    runner_assert_eq(r, http::mw_require_bearer(b_no, "tok-123"), 0, "missing bearer rejected")
+    runner_assert_eq(r, b_no.res.status_code, 401, "bearer reject status 401")
+    runner_assert_str_eq(r, http::header_get(b_no.res.headers, "WWW-Authenticate"), "Bearer", "bearer challenge header")
+
+    # 5. Server-level enforcement guards routes but lets valid callers through
+    let rt = http::router()
+    http::router_get(rt, "/private", "show_private")
+    let s = http::server_new(9877, "127.0.0.1", rt)
+    http::server_enable_basic_auth(s, "user", "pass")
+    let denied = http::ctx_new(http::request_create("GET", "/private"))
+    let m_denied = http::server_process(s, denied)
+    runner_assert_eq(r, m_denied.status, 401, "server denies anonymous")
+    runner_assert_eq(r, denied.res.status_code, 401, "denied ctx status 401")
+    let allowed_req = http::request_create("GET", "/private")
+    http::header_set(allowed_req.headers, "Authorization", "Basic dXNlcjpwYXNz")
+    let allowed = http::ctx_new(allowed_req)
+    let m_allowed = http::server_process(s, allowed)
+    runner_assert_eq(r, m_allowed.found, 1, "server lets authed caller through")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

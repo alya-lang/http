@@ -12,6 +12,10 @@ function handle_user(ctx)
     return http::ctx_json(ctx, "{\"userId\":\"" + uid + "\"}", 200)
 end
 
+function handle_status(ctx)
+    return http::ctx_text(ctx, "healthy", 200)
+end
+
 @cfg(feature = "compress")
 function demo_compression(payload: string)
     say "\n--- HTTP Compression ---"
@@ -47,12 +51,24 @@ function main()
     let r = http::router()
     http::router_get(r, "/hello", handle_hello)
     http::router_get(r, "/users/:id", handle_user)
+    http::router_on_get(r, "/status", handle_status)
 
     let match_res = http::router_match(r, "GET", "/users/42")
     if match_res.found == true
         say "Route Match Found! Pattern: " + match_res.route
         say "Param 'id': " + str(match_res.params["id"])
     end
+
+    # 3b. Handler dispatch invokes functions directly
+    let dispatch_ctx = http::ctx_new(http::request_create("GET", "/status"), http::response())
+    let dispatch_m = http::router_dispatch(r, "GET", "/status", dispatch_ctx)
+    say "Dispatched: " + str(dispatch_m.found) + " Body: " + dispatch_ctx.res.body
+
+    # 3c. Protective middleware: auth, rate limiting, request IDs
+    let guard_ctx = http::ctx_new(http::request_create("GET", "/status"), http::response())
+    say "Request ID: " + http::mw_request_id(guard_ctx)
+    let limiter = http::rate_limit_new(2, 60000)
+    say "Rate allow 1: " + str(http::mw_apply_rate_limit(guard_ctx, limiter, "demo"))
 
     # 4. Response Parsing
     let raw = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nServer: Alya\r\n\r\n{\"ready\":true}"

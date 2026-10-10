@@ -1,0 +1,101 @@
+## HTTP Authentication Middleware (Basic & Bearer).
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "crypto" as crypto
+import "../types.alya"
+import "../core/headers.alya"
+
+## Extracts the `user:password` pair from an HTTP Basic Authorization header.
+## Returns a map `{"user": ..., "pass": ...}`, or null when the request
+## carries no Basic credentials or the payload is malformed.
+pub function auth_basic_credentials(ctx: HttpContext)
+    if ctx is null or ctx.req is null
+        return null
+    end
+    let auth = header_get(ctx.req.headers, "authorization", "")
+    if len(auth) < 7
+        return null
+    end
+    if lower(substring(auth, 0, 6)) != "basic "
+        return null
+    end
+    let token = trim(substring(auth, 6, len(auth) - 6))
+    if token == ""
+        return null
+    end
+    let decoded = ""
+    try
+        decoded = crypto::base64_decode(token)
+    catch err
+        return null
+    end
+    let sep = -1
+    let i = 0
+    while i < len(decoded)
+        if substring(decoded, i, 1) == ":"
+            sep = i
+            break
+        end
+        i += 1
+    end
+    if sep <= 0
+        return null
+    end
+    return {"user": substring(decoded, 0, sep), "pass": substring(decoded, sep + 1, len(decoded) - (sep + 1))}
+end
+
+## Enforces HTTP Basic authentication on an HttpContext.
+## Returns 1 when the credentials match, otherwise responds 401 with a
+## `WWW-Authenticate` challenge, aborts the context, and returns 0.
+pub function mw_require_basic(ctx: HttpContext, exp_user: string, exp_pass: string, realm: string = "Alya") -> int
+    let creds = auth_basic_credentials(ctx)
+    if creds is not null and creds["user"] == exp_user and creds["pass"] == exp_pass
+        return 1
+    end
+    if ctx is not null and ctx.res is not null
+        let res = ctx.res
+        res.status_code = 401
+        res.status_text = "Unauthorized"
+        header_set(res.headers, "WWW-Authenticate", "Basic realm=\"" + realm + "\"")
+        header_set(res.headers, "Content-Type", "application/json; charset=utf-8")
+        res.body = "{\"error\": \"Unauthorized\"}"
+        ctx.aborted = 1
+    end
+    return 0
+end
+
+## Extracts the bearer token from an HTTP Authorization header.
+## Returns the token string, or "" when the request carries no Bearer token.
+pub function auth_bearer_token(ctx: HttpContext) -> string
+    if ctx is null or ctx.req is null
+        return ""
+    end
+    let auth = header_get(ctx.req.headers, "authorization", "")
+    if len(auth) < 8
+        return ""
+    end
+    if lower(substring(auth, 0, 7)) != "bearer "
+        return ""
+    end
+    return trim(substring(auth, 7, len(auth) - 7))
+end
+
+## Enforces Bearer token authentication on an HttpContext.
+## Returns 1 when the token matches, otherwise responds 401 with a
+## `WWW-Authenticate: Bearer` challenge, aborts the context, and returns 0.
+pub function mw_require_bearer(ctx: HttpContext, exp_token: string) -> int
+    let token = auth_bearer_token(ctx)
+    if token != "" and token == exp_token
+        return 1
+    end
+    if ctx is not null and ctx.res is not null
+        let res = ctx.res
+        res.status_code = 401
+        res.status_text = "Unauthorized"
+        header_set(res.headers, "WWW-Authenticate", "Bearer")
+        header_set(res.headers, "Content-Type", "application/json; charset=utf-8")
+        res.body = "{\"error\": \"Unauthorized\"}"
+        ctx.aborted = 1
+    end
+    return 0
+end

@@ -11,9 +11,13 @@ import "./core/sse.alya"
 import "./router/route.alya"
 import "./router/router.alya"
 import "./router/group.alya"
+import "./router/dispatch.alya"
 import "./middleware/cors.alya"
 import "./middleware/logger.alya"
 import "./middleware/recovery.alya"
+import "./middleware/auth.alya"
+import "./middleware/rate_limit.alya"
+import "./middleware/request_id.alya"
 @cfg(feature = "mime")
 import "./middleware/static.alya"
 @cfg(feature = "compress")

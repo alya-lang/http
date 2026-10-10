@@ -11,6 +11,10 @@ import "../core/headers.alya"
 import "../core/cookies.alya"
 import "../core/multipart.alya"
 import "../core/sse.alya"
+@cfg(feature = "json")
+import "json" as json_pkg
+@cfg(feature = "mustache")
+import "mustache" as mustache_pkg
 
 ## Creates a new HttpContext instance
 pub function ctx_new(req: HttpRequest, res: HttpResponse = null, client_sock: int = -1)
@@ -448,4 +452,75 @@ end
 ## Struct method for HttpContext.chunk_end
 pub function HttpContext.chunk_end(self: HttpContext) -> HttpContext
     return ctx_chunk_end(self)
+end
+
+## Sends a JSON response built from a flat string map.
+## Every value is JSON-quoted and escaped; convert numbers with `str(n)`
+## before inserting when a numeric literal is required. Nested maps and
+## arrays are not traversed (the runtime offers no safe type discrimination
+## in 0.0.20, so values are contractually strings).
+##
+## Requires the `json` feature (default-on).
+@cfg(feature = "json")
+pub function ctx_json_map(ctx: HttpContext, m, status_code: int = 200)
+    if ctx is null
+        return ctx
+    end
+    let body = "{"
+    let first = true
+    for key, val in m
+        if first == false
+            body += ", "
+        else
+            first = false
+        end
+        body += "\"" + json_pkg::json_escape(key) + "\": \"" + json_pkg::json_escape(val) + "\""
+    end
+    body += "}"
+    return ctx_json(ctx, body, status_code)
+end
+
+## Parses the request body as JSON into native Alya types.
+## Returns null for empty or invalid bodies (never throws).
+##
+## Requires the `json` feature (default-on).
+@cfg(feature = "json")
+pub function ctx_body_json(ctx: HttpContext)
+    if ctx is null or ctx.req is null
+        return null
+    end
+    let raw = ctx.req.body
+    if raw is null or raw == ""
+        return null
+    end
+    if json_pkg::is_valid(raw) == false
+        return null
+    end
+    try
+        return json_pkg::parse(raw)
+    catch err
+        return null
+    end
+end
+
+## Renders a Mustache template string against `data` and sends it as HTML.
+##
+## Requires the `mustache` feature (default-on).
+@cfg(feature = "mustache")
+pub function ctx_render(ctx: HttpContext, template_str: string, data, status_code: int = 200)
+    if ctx is null
+        return ctx
+    end
+    return ctx_html(ctx, mustache_pkg::render(template_str, data), status_code)
+end
+
+## Renders a Mustache template file against `data` and sends it as HTML.
+##
+## Requires the `mustache` feature (default-on).
+@cfg(feature = "mustache")
+pub function ctx_render_file(ctx: HttpContext, file_path: string, data, status_code: int = 200)
+    if ctx is null
+        return ctx
+    end
+    return ctx_html(ctx, mustache_pkg::render_file(file_path, data), status_code)
 end
