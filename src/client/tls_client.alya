@@ -38,7 +38,7 @@ pub function https_execute(client: HttpClient, method, url_str: string, extra_he
     let parsed = url_pkg::url_parse(url_str)
     let host = parsed.host
     if host == ""
-        return HttpResponse { status_code: -1, status_text: "Invalid URL host: {url_str}", headers: {}, body: "", body_bytes: [], cookies: [] }
+        return HttpResponse { status_code: -1, status_text: f"Invalid URL host: {url_str}", headers: {}, body: "", body_bytes: [], cookies: [] }
     end
     let p_str = url_pkg::url_effective_port(parsed)
     let port = 0
@@ -105,16 +105,16 @@ pub function https_execute(client: HttpClient, method, url_str: string, extra_he
     end
     let ctx = tls::connect(cfg)
     if ctx.last_error != ""
-        return HttpResponse { status_code: -1, status_text: "TLS connection failed to {host}:{port}: " + ctx.last_error, headers: {}, body: "", body_bytes: [], cookies: [] }
+        return HttpResponse { status_code: -1, status_text: f"TLS connection failed to {host}:{port}: " + ctx.last_error, headers: {}, body: "", body_bytes: [], cookies: [] }
     end
     let full = tls::tls_handshake_complete(ctx)
     if full.last_error != ""
-        return HttpResponse { status_code: -1, status_text: "TLS handshake failed to {host}:{port}: " + full.last_error, headers: {}, body: "", body_bytes: [], cookies: [] }
+        return HttpResponse { status_code: -1, status_text: f"TLS handshake failed to {host}:{port}: " + full.last_error, headers: {}, body: "", body_bytes: [], cookies: [] }
     end
 
     let wire = https_build_request(method, host, path, req_headers, body)
     if tls::tls_send_encrypted(full, crypto::str_to_bytes(wire)) < 0
-        let err = "TLS send failed to {host}:{port}"
+        let err = f"TLS send failed to {host}:{port}"
         tls::close(full)
         return HttpResponse { status_code: -1, status_text: err, headers: {}, body: "", body_bytes: [], cookies: [] }
     end

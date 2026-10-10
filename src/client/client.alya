@@ -50,7 +50,7 @@ pub function client_execute(client: HttpClient, method, url_str: string, extra_h
     let host = parsed.host
     let scheme = parsed.scheme
     if host == "" or (scheme != "http" and scheme != "https")
-        return HttpResponse { status_code: -1, status_text: "Invalid URL host: {url_str}", headers: {}, body: "", cookies: [] }
+        return HttpResponse { status_code: -1, status_text: f"Invalid URL host: {url_str}", headers: {}, body: "", cookies: [] }
     end
 
     let p_str = url_pkg::url_effective_port(parsed)
@@ -106,10 +106,10 @@ pub function client_execute(client: HttpClient, method, url_str: string, extra_h
     try
         sock = net::tcp_connect(host, effective_port)
     catch e
-        return HttpResponse { status_code: -1, status_text: "Connection failed to {host}:{effective_port}", headers: {}, body: "", cookies: [] }
+        return HttpResponse { status_code: -1, status_text: f"Connection failed to {host}:{effective_port}", headers: {}, body: "", cookies: [] }
     end
     if sock < 0
-        return HttpResponse { status_code: -1, status_text: "Connection failed to {host}:{effective_port}", headers: {}, body: "", cookies: [] }
+        return HttpResponse { status_code: -1, status_text: f"Connection failed to {host}:{effective_port}", headers: {}, body: "", cookies: [] }
     end
 
     net::tcp_set_timeout(sock, timeout_ms)
@@ -213,7 +213,7 @@ pub function client_execute_bytes(client: HttpClient, method, url_str: string, e
     let host = parsed.host
     let scheme = parsed.scheme
     if host == "" or (scheme != "http" and scheme != "https")
-        return HttpResponse { status_code: -1, status_text: "Invalid URL host: {url_str}", headers: {}, body: "", body_bytes: [], cookies: [] }
+        return HttpResponse { status_code: -1, status_text: f"Invalid URL host: {url_str}", headers: {}, body: "", body_bytes: [], cookies: [] }
     end
 
     let p_str = url_pkg::url_effective_port(parsed)
@@ -273,10 +273,10 @@ pub function client_execute_bytes(client: HttpClient, method, url_str: string, e
     try
         sock = net::tcp_connect(host, effective_port)
     catch e
-        return HttpResponse { status_code: -1, status_text: "Connection failed to {host}:{effective_port}", headers: {}, body: "", body_bytes: [], cookies: [] }
+        return HttpResponse { status_code: -1, status_text: f"Connection failed to {host}:{effective_port}", headers: {}, body: "", body_bytes: [], cookies: [] }
     end
     if sock < 0
-        return HttpResponse { status_code: -1, status_text: "Connection failed to {host}:{effective_port}", headers: {}, body: "", body_bytes: [], cookies: [] }
+        return HttpResponse { status_code: -1, status_text: f"Connection failed to {host}:{effective_port}", headers: {}, body: "", body_bytes: [], cookies: [] }
     end
 
     net::tcp_set_timeout(sock, timeout_ms)
