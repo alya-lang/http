@@ -47,6 +47,8 @@ pub function server_new(port: int = 8080, host: string = "0.0.0.0", router = nul
             "static_dir": "",
             "compression_enabled": 0,
             "compression_config": null,
+            "io_timeout_ms": 5000,
+            "log_format": "",
             "keep_alive_enabled": 0,
             "keep_alive_max": 100,
             "request_id_enabled": 0,
@@ -77,6 +79,27 @@ end
 ## Enables request logging middleware on the server
 pub function server_enable_logger(server, enabled: int = 1)
     server.options["logger_enabled"] = enabled
+    return server
+end
+
+## Sets a custom access-log template for the server (`{method}`, `{path}`,
+## `{status}`, `{latency}`, `{remote}`, `{id}`). Empty uses the classic shape.
+pub function server_set_log_format(server, format: string)
+    if server is null
+        return server
+    end
+    server.options["log_format"] = format
+    return server
+end
+
+## Sets the socket I/O timeout (reads and sends) for accepted connections.
+## This bounds slow clients, not handler runtime: long handlers still run
+## to completion once the request is in memory.
+pub function server_enable_timeout(server, timeout_ms: int = 5000)
+    if server is null
+        return server
+    end
+    server.options["io_timeout_ms"] = timeout_ms
     return server
 end
 
@@ -339,10 +362,10 @@ pub function server_accept(server, timeout_ms: int = 1000)
         return null
     end
 
-    # Set 5-second socket timeout for reading the request
-    net::tcp_set_timeout(client_sock, 5000)
+    # Apply the configured socket timeout for reading the request
+    net::tcp_set_timeout(client_sock, server.options["io_timeout_ms"])
 
-    let ctx = server_read_request(client_sock, 5000, server.options["max_header_size"], server.options["max_body_size"])
+    let ctx = server_read_request(client_sock, server.options["io_timeout_ms"], server.options["max_header_size"], server.options["max_body_size"])
     if ctx is null
         net::tcp_close(client_sock)
         return null
@@ -566,7 +589,7 @@ pub function server_send(server, ctx)
 
     # Log request if logger is enabled
     if server is not null and server.options["logger_enabled"] == true
-        mw_log_context(ctx)
+        mw_log_context_ex(ctx, -1, server.options["log_format"])
     end
 
     let keep = server_should_keep_alive(server, ctx)
@@ -627,10 +650,10 @@ pub function server_serve_once(server, timeout_ms: int = 1000, max_requests: int
     if client_sock < 0
         return 0
     end
-    net::tcp_set_timeout(client_sock, 5000)
+    net::tcp_set_timeout(client_sock, server.options["io_timeout_ms"])
     let served = 0
     let sock = client_sock
-    let ctx = server_read_request(sock, 5000, server.options["max_header_size"], server.options["max_body_size"])
+    let ctx = server_read_request(sock, server.options["io_timeout_ms"], server.options["max_header_size"], server.options["max_body_size"])
     while ctx is not null
         let m = server_process(server, ctx)
         if ctx.aborted != true and m.found == true
@@ -647,7 +670,7 @@ pub function server_serve_once(server, timeout_ms: int = 1000, max_requests: int
         if max_requests > 0 and served >= max_requests
             break
         end
-        ctx = server_read_request(sock, 5000, server.options["max_header_size"], server.options["max_body_size"])
+        ctx = server_read_request(sock, server.options["io_timeout_ms"], server.options["max_header_size"], server.options["max_body_size"])
     end
     if sock >= 0
         net::tcp_close(sock)

@@ -53,6 +53,18 @@ function main()
     let log_str = http::mw_format_log("POST", "/users", 201, 15, "192.168.1.100")
     runner_assert_str_eq(r, log_str, "[HTTP] POST /users 201 - 15ms (192.168.1.100)", "mw_format_log")
 
+    # 4b. Custom log templates (placeholders concatenated so the Alya
+    # string interpolator leaves the tags intact)
+    let tpl_fmt = "{" + "method} {" + "path} {" + "status} {" + "latency} {" + "remote} {" + "id}"
+    let tpl = http::mw_format_log_ex("GET", "/t", 200, 7, "1.2.3.4", "req-9", tpl_fmt)
+    runner_assert_str_eq(r, tpl, "GET /t 200 7ms 1.2.3.4 req-9", "custom template renders")
+    let tpl_empty = http::mw_format_log_ex("GET", "/t", 404, -1, "", "", "")
+    runner_assert_str_eq(r, tpl_empty, "[HTTP] GET /t 404", "empty template falls back")
+    let tpl_kept = "{" + "method} {" + "nope}"
+    let tpl_unknown = http::mw_format_log_ex("GET", "/t", 200, -1, "", "", tpl_kept)
+    let tpl_want = "GET " + "{" + "nope}"
+    runner_assert_str_eq(r, tpl_unknown, tpl_want, "unknown placeholder kept")
+
     # 5. Static files directory traversal rejection
     @cfg(feature = "mime")
     let req_trav = http::request_create("GET", "/assets/../../etc/passwd")

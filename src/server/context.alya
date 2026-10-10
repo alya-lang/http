@@ -76,6 +76,27 @@ pub function ctx_cookie(ctx: HttpContext, name: string, val, path: string = "/",
     return ctx
 end
 
+## Sets an HMAC-signed cookie (`value.signature`) to be sent with the
+## response. Retrieve it with `ctx_get_cookie_signed`.
+pub function ctx_cookie_signed(ctx: HttpContext, name: string, val: string, secret: string, path: string = "/", max_age: int = -1, http_only: int = 0, secure: int = 0, same_site: string = "Lax")
+    return ctx_cookie(ctx, name, cookie_sign(val, secret), path, max_age, http_only, secure, same_site)
+end
+
+## Retrieves and verifies a signed incoming cookie value by name.
+## Returns `default_val` when missing, forged, or empty (do not sign
+## empty values; they are indistinguishable from forgeries).
+pub function ctx_get_cookie_signed(ctx: HttpContext, name: string, secret: string, default_val: string = "") -> string
+    let raw = ctx_get_cookie(ctx, name, "")
+    if raw == ""
+        return default_val
+    end
+    let val = cookie_unsign(raw, secret)
+    if val == ""
+        return default_val
+    end
+    return val
+end
+
 ## Retrieves an incoming cookie value by name
 pub function ctx_get_cookie(ctx: HttpContext, name: string, default_val: string = "")
     if ctx is null
@@ -93,6 +114,18 @@ pub function ctx_get_cookie(ctx: HttpContext, name: string, default_val: string 
         return cks[name]
     end
     return default_val
+end
+
+## (Re)parses the `Cookie` request header into `req.cookies`.
+## The wire path does this during parsing; fabricated contexts (tests,
+## middleware that rewrites headers) call this after mutating headers.
+pub function ctx_parse_cookies(ctx: HttpContext)
+    if ctx is null or ctx.req is null
+        return ctx
+    end
+    let req: HttpRequest = ctx.req
+    req.cookies = cookie_parse(header_get(req.headers, "cookie", ""))
+    return ctx
 end
 
 ## Retrieves a matched route path parameter by name (e.g. :id)

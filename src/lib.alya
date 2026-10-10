@@ -206,6 +206,17 @@ pub function log_context(ctx, latency_ms: int = -1)
     return mw_log_context(ctx, latency_ms)
 end
 
+## Formats a log line from a custom template (`{method}`, `{path}`,
+## `{status}`, `{latency}`, `{remote}`, `{id}`).
+pub function format_log_ex(method, path: string, status: int, latency_ms: int = -1, remote_addr: string = "", request_id: string = "", format: string = "") -> string
+    return mw_format_log_ex(method, path, status, latency_ms, remote_addr, request_id, format)
+end
+
+## Logs an HttpContext request and response with a custom template.
+pub function log_context_ex(ctx, latency_ms: int = -1, format: string = "")
+    return mw_log_context_ex(ctx, latency_ms, format)
+end
+
 ## Splits a URL path into non-empty segments.
 pub function split_path(path: string) -> array
     return route_split_path(path)

@@ -198,7 +198,7 @@ pub function _on_reactive_client_data(client_stream: TcpStream, chunk: string)
 
                 # Log request if logger is enabled
                 if state.server.options["logger_enabled"] == true
-                    mw_log_context(ctx)
+                    mw_log_context_ex(ctx, -1, state.server.options["log_format"])
                 end
 
                 # Connection persistence handling (Keep-Alive vs Close)

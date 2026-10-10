@@ -1,6 +1,6 @@
 [package]
 name = "http"
-version = "0.3.0"
+version = "0.4.0"
 alya-version = "0.0.19"
 entry = "src/lib.alya"
 description = "Production-ready HTTP and WebSocket client, server, router, reactive event loop, and middleware toolkit for Alya"

@@ -33,6 +33,35 @@ function main()
     let parsed_empty = http::cookie_parse("")
     runner_assert_eq(r, len(parsed_empty), 0, "empty cookie header gives empty map")
 
+    # 5. Signed cookies round-trip and resist forgery
+    let secret = "cookie-secret"
+    let signed = http::cookie_sign("sess-42", secret)
+    runner_assert_str_eq(r, http::cookie_unsign(signed, secret), "sess-42", "signed roundtrip")
+    runner_assert_str_eq(r, http::cookie_unsign(signed, "wrong"), "", "wrong secret rejected")
+    runner_assert_str_eq(r, http::cookie_unsign("sess-42.nosuchsig", secret), "", "forged signature rejected")
+    runner_assert_str_eq(r, http::cookie_unsign("nodotatall", secret), "", "missing dot rejected")
+    runner_assert_str_eq(r, http::cookie_unsign("", secret), "", "empty rejected")
+    let dotted = http::cookie_sign("a.b.c", secret)
+    runner_assert_str_eq(r, http::cookie_unsign(dotted, secret), "a.b.c", "dots in value survive")
+
+    # 6. Signed context helpers set and read cookies
+    let set_ctx = http::ctx_new(http::request_create("GET", "/"))
+    http::ctx_cookie_signed(set_ctx, "sess", "sess-42", secret)
+    let stored = set_ctx.res.cookies[0]
+    runner_assert(r, index_of(http::cookie_format(stored), "sess=sess-42.") >= 0, "signed cookie stored")
+
+    let read_req = http::request_create("GET", "/")
+    http::header_set(read_req.headers, "Cookie", "sess=" + signed)
+    let read_ctx = http::ctx_new(read_req)
+    http::ctx_parse_cookies(read_ctx)
+    runner_assert_str_eq(r, http::ctx_get_cookie_signed(read_ctx, "sess", secret, "anon"), "sess-42", "signed cookie read")
+    let forged_req = http::request_create("GET", "/")
+    http::header_set(forged_req.headers, "Cookie", "sess=sess-42.nosuchsig")
+    let forged_ctx = http::ctx_new(forged_req)
+    http::ctx_parse_cookies(forged_ctx)
+    runner_assert_str_eq(r, http::ctx_get_cookie_signed(forged_ctx, "sess", secret, "anon"), "anon", "forged cookie falls back")
+    runner_assert_str_eq(r, http::ctx_get_cookie_signed(http::ctx_new(http::request_create("GET", "/")), "sess", secret, "anon"), "anon", "missing cookie falls back")
+
     let failed = runner_summary(r)
     if failed > 0
         exit(1)

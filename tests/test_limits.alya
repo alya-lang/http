@@ -71,6 +71,20 @@ function main()
     net::tcp_close(sock3)
     http::server_close(srv2)
 
+    # 5. I/O timeout is configurable and bounds stalled clients
+    let srv3 = http::server_new(19888, "127.0.0.1", http::router())
+    runner_assert_eq(r, srv3.options["io_timeout_ms"], 5000, "default io timeout 5s")
+    http::server_enable_timeout(srv3, 400)
+    runner_assert_eq(r, srv3.options["io_timeout_ms"], 400, "custom io timeout")
+    http::server_start(srv3)
+    let sock4 = net::tcp_connect("127.0.0.1", 19888)
+    net::tcp_set_timeout(sock4, 5000)
+    # Connect but never send: the read must time out instead of hanging
+    let ctx_stalled = http::server_accept(srv3, 3000)
+    runner_assert(r, ctx_stalled is null, "stalled client times out")
+    net::tcp_close(sock4)
+    http::server_close(srv3)
+
     let failed = runner_summary(r)
     if failed > 0
         exit(1)

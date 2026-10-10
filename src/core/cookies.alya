@@ -6,6 +6,48 @@
 # Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
 import "../types.alya"
+import "crypto" as crypto
+
+## Signs a cookie value with HMAC-SHA256, returning `value.signature`
+## (base64url). The signature alphabet contains no `.`, so values are
+## split on the last dot when verifying.
+pub function cookie_sign(value: string, secret: string) -> string
+    if value is null
+        value = ""
+    end
+    let sig = crypto::base64url_encode_bytes(crypto::hmac_sha256_bytes(crypto::str_to_bytes(secret), crypto::str_to_bytes(value)))
+    return value + "." + sig
+end
+
+## Verifies a signed cookie value, returning the original value or `""`
+## when the signature is missing, malformed, or forged (constant-time
+## comparison; never throws).
+pub function cookie_unsign(signed_value: string, secret: string) -> string
+    if signed_value is null or signed_value == ""
+        return ""
+    end
+    let dot = -1
+    let i = 0
+    while i < len(signed_value)
+        if substring(signed_value, i, 1) == "."
+            dot = i
+        end
+        i += 1
+    end
+    if dot < 0
+        return ""
+    end
+    let value = substring(signed_value, 0, dot)
+    let sig = substring(signed_value, dot + 1, len(signed_value) - (dot + 1))
+    if sig == ""
+        return ""
+    end
+    let expected = crypto::base64url_encode_bytes(crypto::hmac_sha256_bytes(crypto::str_to_bytes(secret), crypto::str_to_bytes(value)))
+    if crypto::constant_time_eq(sig, expected) == false
+        return ""
+    end
+    return value
+end
 
 ## Creates a new HttpCookie struct
 pub function cookie_new(name: string, value: string, path: string = "/", max_age: int = -1, http_only: int = 0, secure: int = 0, same_site: string = "Lax")

@@ -291,6 +291,14 @@ main()
 | `server_enable_static(server, prefix, dir)` | `server: HttpServer, prefix: string, dir: string` | Enables static file serving with `.br`/`.gz` pre-compressed support |
 | `server_enable_cors(server, origin, methods, headers)` | `server: HttpServer, ...` | Enables CORS middleware |
 | `server_enable_logger(server, enabled)` | `server: HttpServer, enabled: int` | Enables request logger middleware |
+| `server_set_log_format(server, format)` | `server: HttpServer, format: string` | Sets a custom access-log template (`{method}`, `{path}`, `{status}`, `{latency}`, `{remote}`, `{id}`) |
+| `server_enable_timeout(server, timeout_ms)` | `server: HttpServer, ...` | Sets socket I/O timeout for accepted connections (bounds slow clients, not handler runtime) |
+| `format_log_ex(method, path, status, ...)` | `..., request_id, format` | Formats a log line from a custom template (build it by concatenation, see note below) |
+| `cookie_sign(value, secret)` | `value, secret: string` | Signs a cookie value (`value.signature`, HMAC-SHA256) |
+| `cookie_unsign(signed, secret)` | `signed, secret: string` | Verifies a signed value; `""` when forged |
+| `ctx_cookie_signed(ctx, name, val, secret, ...)` | `ctx: HttpContext, ...` | Sets an HMAC-signed response cookie |
+| `ctx_get_cookie_signed(ctx, name, secret, default)` | `ctx: HttpContext, ...` | Reads and verifies a signed cookie; default when missing/forged |
+| `ctx_parse_cookies(ctx)` | `ctx: HttpContext` | (Re)parses the `Cookie` header into `req.cookies` |
 | `context_json(ctx, status_code, json_str)` | `ctx: HttpContext, status: int, json: string` | Sends a JSON response with proper header |
 | `context_text(ctx, status_code, text_str)` | `ctx: HttpContext, status: int, text: string` | Sends a plain text response |
 
@@ -370,6 +378,12 @@ main()
 | `ctx_json_map(ctx, m, status)` | `ctx: HttpContext, m: map, ...` | Sends a flat string map as a quoted JSON object (`json` feature) |
 | `ctx_render(ctx, template, data, status)` | `ctx: HttpContext, ...` | Renders a Mustache template string as HTML (`mustache` feature) |
 | `ctx_render_file(ctx, path, data, status)` | `ctx: HttpContext, ...` | Renders a Mustache template file as HTML (`mustache` feature) |
+
+> [!NOTE]
+> **Brace literals:** Alya interpolates every `{name}` inside double-quoted
+> strings, so log templates and Mustache tags cannot be written as single
+> literals (`"{method}"` would interpolate). Build them by concatenation
+> (`"{" + "method}"`, `"{{" + "name" + "}}"`) or from variables.
 
 ### Reactive Server API
 
