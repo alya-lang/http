@@ -356,6 +356,7 @@ main()
 | Function | Parameters | Description |
 |---|---|---|
 | `ctx_body_json(ctx)` | `ctx: HttpContext` | Parses the request body as JSON; null when empty/invalid (`json` feature) |
+| `ctx_json_value(ctx, val, status)` | `ctx: HttpContext, val: any, ...` | Sends any native value as recursive JSON (`json` feature) |
 | `ctx_json_map(ctx, m, status)` | `ctx: HttpContext, m: map, ...` | Sends a flat string map as a quoted JSON object (`json` feature) |
 | `ctx_render(ctx, template, data, status)` | `ctx: HttpContext, ...` | Renders a Mustache template string as HTML (`mustache` feature) |
 | `ctx_render_file(ctx, path, data, status)` | `ctx: HttpContext, ...` | Renders a Mustache template file as HTML (`mustache` feature) |

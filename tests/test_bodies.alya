@@ -21,6 +21,15 @@ function main()
     http::ctx_json_map(ctx1b, {"q": "a\"b"})
     runner_assert_str_eq(r, ctx1b.res.body, "{\"q\": \"a\\\"b\"}", "json map escapes quotes")
 
+    # 1c. Arbitrary nested values serialize recursively (single-key
+    # maps keep the output order-stable for exact asserts)
+    let ctx1c = http::ctx_new(http::request_create("GET", "/v"))
+    http::ctx_json_value(ctx1c, {"user": {"name": "Ada"}})
+    runner_assert_str_eq(r, ctx1c.res.body, "{\"user\": {\"name\": \"Ada\"}}", "json value nested map")
+    let ctx1d = http::ctx_new(http::request_create("GET", "/v"))
+    http::ctx_json_value(ctx1d, [1, "two", null])
+    runner_assert_str_eq(r, ctx1d.res.body, "[1, \"two\", null]", "json value mixed array")
+
     # 2. Parse request bodies, null on empty/invalid (never throws)
     let req2 = http::request_create("POST", "/v", "", {}, "{\"a\":1}")
     let ctx2 = http::ctx_new(req2)

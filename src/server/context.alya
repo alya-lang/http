@@ -456,9 +456,8 @@ end
 
 ## Sends a JSON response built from a flat string map.
 ## Every value is JSON-quoted and escaped; convert numbers with `str(n)`
-## before inserting when a numeric literal is required. Nested maps and
-## arrays are not traversed (the runtime offers no safe type discrimination
-## in 0.0.20, so values are contractually strings).
+## before inserting when a numeric literal is required. For arbitrary
+## nested values prefer `ctx_json_value`.
 ##
 ## Requires the `json` feature (default-on).
 @cfg(feature = "json")
@@ -478,6 +477,19 @@ pub function ctx_json_map(ctx: HttpContext, m, status_code: int = 200)
     end
     body += "}"
     return ctx_json(ctx, body, status_code)
+end
+
+## Sends a JSON response serialized from any native value (maps and
+## arrays nest recursively, strings are quoted and escaped).
+## Booleans share the int encoding and render as `1`/`0`.
+##
+## Requires the `json` feature (default-on).
+@cfg(feature = "json")
+pub function ctx_json_value(ctx: HttpContext, val, status_code: int = 200)
+    if ctx is null
+        return ctx
+    end
+    return ctx_json(ctx, json_pkg::stringify(val), status_code)
 end
 
 ## Parses the request body as JSON into native Alya types.
