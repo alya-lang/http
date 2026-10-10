@@ -9,6 +9,7 @@ import "std/net" as net
 import "tls" as tls
 import "crypto" as crypto
 import "../types.alya"
+import "../core/status.alya"
 import "../core/protocol.alya"
 import "../core/headers.alya"
 import "../router/router.alya"
@@ -49,11 +50,15 @@ pub function server_new(port: int = 8080, host: string = "0.0.0.0", router = nul
             "keep_alive_enabled": 0,
             "keep_alive_max": 100,
             "request_id_enabled": 0,
+            "forwarded_enabled": 0,
+            "max_header_size": 1048576,
+            "max_body_size": 8388608,
             "auth_enabled": 0,
             "auth_kind": "",
             "auth_user": "",
             "auth_pass": "",
             "auth_token": "",
+            "auth_secret": "",
             "rate_limit_enabled": 0,
             "rate_limiter": null
         },
@@ -156,6 +161,43 @@ pub function server_enable_bearer_auth(server, token: string)
     server.options["auth_enabled"] = 1
     server.options["auth_kind"] = "bearer"
     server.options["auth_token"] = token
+    return server
+end
+
+## Enables JWT (HS256) authentication enforcement in `server_process`.
+## Requires the `jwt` feature at build time; without it, JWT-gated
+## requests fail closed (401).
+pub function server_enable_jwt_auth(server, secret: string)
+    if server is null
+        return server
+    end
+    server.options["auth_enabled"] = 1
+    server.options["auth_kind"] = "jwt"
+    server.options["auth_secret"] = secret
+    return server
+end
+
+## Caps accepted request header and body sizes in bytes.
+## Oversized requests are rejected with `413 Content Too Large` during
+## the read, before allocation can grow (DoS protection).
+pub function server_enable_limits(server, max_header_size: int = 1048576, max_body_size: int = 8388608)
+    if server is null
+        return server
+    end
+    server.options["max_header_size"] = max_header_size
+    server.options["max_body_size"] = max_body_size
+    return server
+end
+
+## Trusts `X-Forwarded-For` / `X-Forwarded-Proto` when resolving the
+## client IP in `server_process` (rate limiting and logging then see the
+## real client). Enable only behind known, sanitizing proxies: clients
+## can spoof these headers on direct connections.
+pub function server_enable_forwarded(server, enabled: int = 1)
+    if server is null
+        return server
+    end
+    server.options["forwarded_enabled"] = enabled
     return server
 end
 
@@ -267,8 +309,10 @@ pub function server_accept(server, timeout_ms: int = 1000)
             if proto_find_bytes(raw, [13, 10, 13, 10], 0) >= 0
                 break
             end
-            if len(raw) > 1048576
-                break
+            if len(raw) > server.options["max_header_size"]
+                tls::tls_send_encrypted(tls_ctx, crypto::str_to_bytes(_too_large_wire()))
+                tls::close(tls_ctx)
+                return null
             end
             guard += 1
         end
@@ -298,7 +342,7 @@ pub function server_accept(server, timeout_ms: int = 1000)
     # Set 5-second socket timeout for reading the request
     net::tcp_set_timeout(client_sock, 5000)
 
-    let ctx = server_read_request(client_sock, 5000)
+    let ctx = server_read_request(client_sock, 5000, server.options["max_header_size"], server.options["max_body_size"])
     if ctx is null
         net::tcp_close(client_sock)
         return null
@@ -307,10 +351,12 @@ pub function server_accept(server, timeout_ms: int = 1000)
 end
 
 ## Reads one HTTP request from an already-connected client socket and
-## wraps it in an HttpContext, or null when the peer sent nothing (closed).
-## The socket is left open: the caller owns closing it. This is the reuse
-## primitive behind keep-alive (`server_serve_once` loops on it).
-pub function server_read_request(client_sock: int, timeout_ms: int = 5000)
+## wraps it in an HttpContext, or null when the peer sent nothing (closed)
+## or exceeded `max_header_size` / `max_body_size` (a minimal `413`
+## response is sent first, then the caller closes the socket).
+## The socket is otherwise left open: the caller owns closing it. This is
+## the reuse primitive behind keep-alive (`server_serve_once` loops on it).
+pub function server_read_request(client_sock: int, timeout_ms: int = 5000, max_header_size: int = 1048576, max_body_size: int = 8388608)
     if client_sock < 0
         return null
     end
@@ -328,13 +374,25 @@ pub function server_read_request(client_sock: int, timeout_ms: int = 5000)
             raw_req.push(chunk[k])
             k += 1
         end
+        if len(raw_req) > max_header_size + max_body_size
+            net::tcp_send(client_sock, _too_large_wire())
+            return null
+        end
         # If headers end delimiter is found, stop reading for simple requests
         let delim_idx = proto_find_bytes(raw_req, [13, 10, 13, 10], 0)
         if delim_idx >= 0
+            if delim_idx > max_header_size
+                net::tcp_send(client_sock, _too_large_wire())
+                return null
+            end
             break
         end
         let alt_delim = proto_find_bytes(raw_req, [10, 10], 0)
         if alt_delim >= 0
+            if alt_delim > max_header_size
+                net::tcp_send(client_sock, _too_large_wire())
+                return null
+            end
             break
         end
     end
@@ -363,6 +421,10 @@ pub function server_read_request(client_sock: int, timeout_ms: int = 5000)
                 want = to_int(trim(substring(hlow, val_start, val_end - val_start)))
             end
         end
+        if want > max_body_size
+            net::tcp_send(client_sock, _too_large_wire())
+            return null
+        end
         let have = len(raw_req) - (hsep + 4)
         let guard = 0
         while want > have and guard < 2048
@@ -387,12 +449,25 @@ pub function server_read_request(client_sock: int, timeout_ms: int = 5000)
     return context_create(req, res, client_sock)
 end
 
+## Builds a minimal `413` rejection wire sent before closing oversized
+## connections (no context allocation required).
+function _too_large_wire() -> string
+    let text = http_status_text(413)
+    let body = "{\"error\": \"" + text + "\"}"
+    return "HTTP/1.1 413 " + text + "\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: " + str(len(body)) + "\r\nConnection: close\r\n\r\n" + body
+end
+
 # Processes common middlewares (request ID, CORS, auth, rate limit,
 # static files) and matches route on HttpContext
 ## Returns the RouteMatch result
 pub function server_process(server, ctx: HttpContext)
     if server is null or ctx is null
         return RouteMatch { found: 0, action: "not_found", handler: null, route: "", params: {}, status: 404, allowed_methods: [] }
+    end
+
+    # Resolve proxy identity first so guards below see the real client
+    if server.options["forwarded_enabled"] == true and ctx.req is not null
+        ctx.req.remote_addr = ctx_client_ip(ctx)
     end
 
     # Trace correlation first so even rejected requests carry an ID
@@ -408,12 +483,20 @@ pub function server_process(server, ctx: HttpContext)
         end
     end
 
-    # Enforce authentication when enabled (preflight already returned above)
+    # Enforce authentication when enabled (preflight already returned above).
+    # JWT without the `jwt` feature fails closed through the basic gate.
     if server.options["auth_enabled"] == true and ctx.aborted != true
         let authed = 0
-        when server.options["auth_kind"]
-            is "bearer" then authed = mw_require_bearer(ctx, server.options["auth_token"])
-            else authed = mw_require_basic(ctx, server.options["auth_user"], server.options["auth_pass"])
+        let auth_kind = server.options["auth_kind"]
+        if auth_kind == "bearer"
+            authed = mw_require_bearer(ctx, server.options["auth_token"])
+        end
+        @cfg(feature = "jwt")
+        if auth_kind == "jwt"
+            authed = mw_require_jwt(ctx, server.options["auth_secret"])
+        end
+        if auth_kind != "bearer" and auth_kind != "jwt"
+            authed = mw_require_basic(ctx, server.options["auth_user"], server.options["auth_pass"])
         end
         if authed == false
             return RouteMatch { found: 0, action: "unauthorized", handler: null, route: "", params: {}, status: 401, allowed_methods: [] }
@@ -547,7 +630,7 @@ pub function server_serve_once(server, timeout_ms: int = 1000, max_requests: int
     net::tcp_set_timeout(client_sock, 5000)
     let served = 0
     let sock = client_sock
-    let ctx = server_read_request(sock, 5000)
+    let ctx = server_read_request(sock, 5000, server.options["max_header_size"], server.options["max_body_size"])
     while ctx is not null
         let m = server_process(server, ctx)
         if ctx.aborted != true and m.found == true
@@ -564,7 +647,7 @@ pub function server_serve_once(server, timeout_ms: int = 1000, max_requests: int
         if max_requests > 0 and served >= max_requests
             break
         end
-        ctx = server_read_request(sock, 5000)
+        ctx = server_read_request(sock, 5000, server.options["max_header_size"], server.options["max_body_size"])
     end
     if sock >= 0
         net::tcp_close(sock)

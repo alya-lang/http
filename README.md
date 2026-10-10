@@ -19,7 +19,7 @@ Production-ready HTTP client, server, router, compression, and middleware toolki
 - 🚀 **HTTP Server & Context**: Built on low-level TCP sockets (`std/net`) or non-blocking event loops, offering intuitive request context (`HttpContext`), JSON responses, text responses, file serving, and status helpers.
 - 🧭 **Handler Dispatch**: Register first-class handler functions (`router_on`, `router_on_get`, ...) and invoke them with `router_dispatch` — string action names keep working for match-only flows.
 - 🔁 **Keep-Alive & Serve Loop**: Opt-in HTTP/1.1 connection reuse (`server_enable_keep_alive`), single-request reads (`server_read_request`), and blocking serve helpers (`server_serve_once`, `server_serve`).
-- 🔐 **Protective Middleware**: HTTP Basic/Bearer auth (`mw_require_basic`, `mw_require_bearer`), fixed-window rate limiting (`mw_apply_rate_limit`), and request ID tracing (`mw_request_id`) — all enforceable from `server_process` via `server_enable_*`.
+- 🔐 **Protective Middleware**: HTTP Basic/Bearer/JWT auth (`mw_require_basic`, `mw_require_bearer`, `mw_require_jwt`), fixed-window rate limiting (`mw_apply_rate_limit`), and request ID tracing (`mw_request_id`) — all enforceable from `server_process` via `server_enable_*`.
 - 🧩 **JSON & View Helpers**: Parse request bodies (`ctx_body_json`), answer string maps (`ctx_json_map`), and render Mustache templates as HTML (`ctx_render`, `ctx_render_file`).
 - 🛣️ **Parametric Router & Route Groups**: Fast URL pattern matching with wildcard (`*path`) and named parameters (`:id`), plus subrouter groups with shared path prefixes and middleware chains.
 - 🛡️ **Extensible Middleware**: Out-of-the-box middleware for Compression (`mw_apply_compression`), CORS (`cors_middleware`), request logging (`logger_middleware`), panic recovery (`recovery_middleware`), and static file serving (`static_middleware`).
@@ -64,7 +64,7 @@ http/
 │   │   ├── tls_client.alya # Native HTTPS via alya-lang/tls (no curl bridge)
 │   │   └── methods.alya    # Convenience functions (http_get, http_post, etc.)
 │   └── middleware/
-│       ├── auth.alya       # HTTP Basic and Bearer authentication gates
+│       ├── auth.alya       # HTTP Basic, Bearer, and JWT (HS256) authentication gates
 │       ├── rate_limit.alya # Fixed-window in-memory rate limiter (429)
 │       ├── request_id.alya # X-Request-ID trace correlation
 │       ├── compress.alya   # HTTP response compression middleware (Brotli, Zstd, Gzip, Deflate)
@@ -75,7 +75,7 @@ http/
 ├── examples/
 │   ├── compression_demo.alya # Dedicated HTTP compression showcase
 │   └── demo.alya           # Comprehensive usage demo
-├── tests/                  # 28 test suites (100% passing)
+├── tests/                  # 31 test suites (100% passing)
 │   ├── test_auth.alya
 │   ├── test_bodies.alya
 │   ├── test_bytes.alya
@@ -84,10 +84,13 @@ http/
 │   ├── test_context.alya
 │   ├── test_cookies.alya
 │   ├── test_dispatch.alya
+│   ├── test_forwarded.alya
 │   ├── test_guards.alya
 │   ├── test_headers.alya
 │   ├── test_https.alya
+│   ├── test_jwt.alya
 │   ├── test_keepalive.alya
+│   ├── test_limits.alya
 │   ├── test_middleware.alya
 │   ├── test_multipart.alya
 │   ├── test_protocol.alya
@@ -134,6 +137,7 @@ alya install
 | `event` | ✅ | Event-driven reactive server (`reactive_server`). Needs `Lib/event`. |
 | `mime` | ✅ | Static file serving (`serve_static`, `mw_serve_static`). Needs `Lib/mime`. |
 | `json` | ✅ | JSON body helpers (`ctx_body_json`, `ctx_json_map`). Needs `Lib/json`. |
+| `jwt` | ✅ | JWT authentication (`mw_require_jwt`, `server_enable_jwt_auth`). Needs `Lib/jwt`. |
 | `mustache` | ✅ | View rendering (`ctx_render`, `ctx_render_file`). Needs `Lib/mustache`. |
 
 `crypto`, `url`, and `tls` stay required: WebSocket handshakes need SHA-1, clients need URL parsing, and TLS paths are woven through the server/client cores.
@@ -340,10 +344,16 @@ main()
 |---|---|---|
 | `mw_require_basic(ctx, user, pass, realm)` | `ctx: HttpContext, ...` | Enforces HTTP Basic auth; 401 + abort on failure |
 | `mw_require_bearer(ctx, token)` | `ctx: HttpContext, token: string` | Enforces Bearer auth; 401 + abort on failure |
+| `mw_require_jwt(ctx, secret, leeway)` | `ctx: HttpContext, ...` | Enforces JWT (HS256) auth; 401 + abort on failure (`jwt` feature) |
 | `auth_basic_credentials(ctx)` | `ctx: HttpContext` | Parses Basic credentials into `{user, pass}` or null |
 | `auth_bearer_token(ctx)` | `ctx: HttpContext` | Extracts the Bearer token or `""` |
 | `server_enable_basic_auth(server, user, pass)` | `server: HttpServer, ...` | Enforces Basic auth in `server_process` |
 | `server_enable_bearer_auth(server, token)` | `server: HttpServer, ...` | Enforces Bearer auth in `server_process` |
+| `server_enable_jwt_auth(server, secret)` | `server: HttpServer, ...` | Enforces JWT auth in `server_process` (`jwt` feature; fails closed without it) |
+| `server_enable_limits(server, max_header, max_body)` | `server: HttpServer, ...` | Caps header/body bytes; oversized reads get 413 |
+| `server_enable_forwarded(server, enabled)` | `server: HttpServer, ...` | Trusts proxy headers for client identity (behind known proxies only) |
+| `ctx_client_ip(ctx)` | `ctx: HttpContext` | Effective client IP (`X-Forwarded-For` → `X-Real-IP` → socket) |
+| `ctx_scheme(ctx)` | `ctx: HttpContext` | Effective scheme (`X-Forwarded-Proto`, TLS, or `http`) |
 | `rate_limit_new(limit, window_ms)` | `limit: int, window_ms: int` | Creates a fixed-window `RateLimiter` |
 | `rate_limit_check(limiter, key)` | `limiter: RateLimiter, key: string` | Records a hit; 1 allowed, 0 denied |
 | `mw_apply_rate_limit(ctx, limiter, key)` | `ctx: HttpContext, ...` | Enforces the limiter; 429 + `Retry-After` on denial |
@@ -440,7 +450,7 @@ main()
 
 ## 🧪 Running Tests & Benchmarks
 
-Run all 28 test suites using `alya`:
+Run all 31 test suites using `alya`:
 
 ```bash
 alya test

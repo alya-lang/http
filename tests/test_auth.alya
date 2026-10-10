@@ -58,6 +58,19 @@ function main()
     let m_allowed = http::server_process(s, allowed)
     runner_assert_eq(r, m_allowed.found, 1, "server lets authed caller through")
 
+    # 6. JWT auth without the jwt feature fails closed (slim builds deny
+    # everything through the basic fallback with empty credentials)
+    @cfg(not(feature = "jwt"))
+    let slim_srv = http::server_new(9880, "127.0.0.1", rt)
+    @cfg(not(feature = "jwt"))
+    http::server_enable_jwt_auth(slim_srv, "s3cret")
+    @cfg(not(feature = "jwt"))
+    let slim_denied = http::ctx_new(http::request_create("GET", "/private"))
+    @cfg(not(feature = "jwt"))
+    let m_slim = http::server_process(slim_srv, slim_denied)
+    @cfg(not(feature = "jwt"))
+    runner_assert_eq(r, m_slim.status, 401, "slim jwt gate fails closed")
+
     let failed = runner_summary(r)
     if failed > 0
         exit(1)

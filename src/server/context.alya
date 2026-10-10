@@ -536,3 +536,52 @@ pub function ctx_render_file(ctx: HttpContext, file_path: string, data, status_c
     end
     return ctx_html(ctx, mustache_pkg::render_file(file_path, data), status_code)
 end
+
+## Retrieves the effective client IP, preferring `X-Forwarded-For` (first
+## entry) then `X-Real-IP` before falling back to the socket remote address.
+## Only trust proxy headers behind known proxies (see `server_enable_forwarded`).
+pub function ctx_client_ip(ctx: HttpContext) -> string
+    if ctx is null or ctx.req is null
+        return ""
+    end
+    let xff = header_get(ctx.req.headers, "x-forwarded-for", "")
+    if xff != ""
+        let comma = _ctx_find_char(xff, ",")
+        if comma >= 0
+            return trim(substring(xff, 0, comma))
+        end
+        return trim(xff)
+    end
+    let real_ip = header_get(ctx.req.headers, "x-real-ip", "")
+    if real_ip != ""
+        return trim(real_ip)
+    end
+    return ctx.req.remote_addr
+end
+
+## Returns the effective request scheme: `X-Forwarded-Proto` when present,
+## otherwise `https` for TLS contexts and `http`.
+pub function ctx_scheme(ctx: HttpContext) -> string
+    if ctx is not null and ctx.req is not null
+        let proto = lower(header_get(ctx.req.headers, "x-forwarded-proto", ""))
+        if proto == "https" or proto == "http"
+            return proto
+        end
+    end
+    if ctx is not null and ctx.data is not null and ctx.data["tls_enabled"] == true
+        return "https"
+    end
+    return "http"
+end
+
+# Finds the first occurrence of a single character, or -1.
+function _ctx_find_char(s: string, ch: string) -> int
+    let i = 0
+    while i < len(s)
+        if substring(s, i, 1) == ch
+            return i
+        end
+        i += 1
+    end
+    return -1
+end

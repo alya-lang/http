@@ -1,0 +1,80 @@
+## Test suite for request size limits (413 Content Too Large)
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+import "std/test"
+import "std/net" as net
+import "../src/lib.alya" as http
+
+function main()
+    test_suite("HTTP Limits Tests")
+    let r = runner_new()
+
+    # 1. Limits are configurable and default to 1MB headers / 8MB bodies
+    let s_cfg = http::server_new(19884, "127.0.0.1", http::router())
+    let opt_cfg = s_cfg.options
+    runner_assert_eq(r, opt_cfg["max_header_size"], 1048576, "default max header 1MB")
+    runner_assert_eq(r, opt_cfg["max_body_size"], 8388608, "default max body 8MB")
+    http::server_enable_limits(s_cfg, 64, 32)
+    runner_assert_eq(r, opt_cfg["max_header_size"], 64, "custom max header")
+    runner_assert_eq(r, opt_cfg["max_body_size"], 32, "custom max body")
+
+    # 2. Oversized declared body is rejected with 413 before reading it
+    let srv = http::server_new(19885, "127.0.0.1", http::router())
+    http::server_enable_limits(srv, 1024, 32)
+    http::server_start(srv)
+    runner_assert_eq(r, srv.running, 1, "server listening")
+
+    let sock = net::tcp_connect("127.0.0.1", 19885)
+    runner_assert(r, sock >= 0, "client connected")
+    net::tcp_set_timeout(sock, 5000)
+    net::tcp_send(sock, "POST /upload HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 100000\r\nConnection: close\r\n\r\n")
+    let ctx_big = http::server_accept(srv, 3000)
+    runner_assert(r, ctx_big is null, "oversized body yields no context")
+    let resp_big = ""
+    if net::tcp_poll(sock, 3000) == true
+        resp_big = net::tcp_recv(sock, 4096)
+    end
+    net::tcp_close(sock)
+    let parsed_big = http::http_parse_response(resp_big)
+    runner_assert_eq(r, parsed_big.status_code, 413, "oversized body status 413")
+
+    # 3. Oversized headers are rejected with 413 (pad exceeds the 1KB cap)
+    let sock2 = net::tcp_connect("127.0.0.1", 19885)
+    net::tcp_set_timeout(sock2, 5000)
+    let pad = ""
+    let pi = 0
+    while pi < 1200
+        pad += "a"
+        pi += 1
+    end
+    net::tcp_send(sock2, "GET /x HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Pad: " + pad + "\r\n\r\n")
+    let ctx_hdr = http::server_accept(srv, 3000)
+    runner_assert(r, ctx_hdr is null, "oversized headers yield no context")
+    let resp_hdr = ""
+    if net::tcp_poll(sock2, 3000) == true
+        resp_hdr = net::tcp_recv(sock2, 4096)
+    end
+    net::tcp_close(sock2)
+    let parsed_hdr = http::http_parse_response(resp_hdr)
+    runner_assert_eq(r, parsed_hdr.status_code, 413, "oversized headers status 413")
+    http::server_close(srv)
+
+    # 4. Requests within limits still pass
+    let srv2 = http::server_new(19886, "127.0.0.1", http::router())
+    http::server_enable_limits(srv2, 1024, 64)
+    http::server_start(srv2)
+    let sock3 = net::tcp_connect("127.0.0.1", 19886)
+    net::tcp_set_timeout(sock3, 5000)
+    net::tcp_send(sock3, "POST /ok HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello")
+    let ctx_ok = http::server_accept(srv2, 3000)
+    runner_assert(r, ctx_ok is not null, "small request accepted")
+    runner_assert_str_eq(r, ctx_ok.req.body, "hello", "small body intact")
+    net::tcp_close(sock3)
+    http::server_close(srv2)
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

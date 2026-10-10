@@ -69,6 +69,7 @@ function main()
     say "Request ID: " + http::mw_request_id(guard_ctx)
     let limiter = http::rate_limit_new(2, 60000)
     say "Rate allow 1: " + str(http::mw_apply_rate_limit(guard_ctx, limiter, "demo"))
+    say "Client IP: " + http::ctx_client_ip(guard_ctx) + " Scheme: " + http::ctx_scheme(guard_ctx)
 
     # 4. Response Parsing
     let raw = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nServer: Alya\r\n\r\n{\"ready\":true}"

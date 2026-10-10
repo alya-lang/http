@@ -1,0 +1,76 @@
+## Test suite for JWT authentication middleware (HS256)
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+import "std/test"
+import "jwt" as jwt_pkg
+import "../src/lib.alya" as http
+
+@cfg(feature = "jwt")
+function main()
+    test_suite("HTTP JWT Middleware Tests")
+    let r = runner_new()
+    let secret = "test-secret-123"
+
+    # 1. Valid signed token passes and exposes claims
+    let token = jwt_pkg::sign({"sub": "u1"}, secret, 3600)
+    let ok_req = http::request_create("GET", "/me")
+    http::header_set(ok_req.headers, "Authorization", "Bearer " + token)
+    let ok_ctx = http::ctx_new(ok_req)
+    runner_assert_eq(r, http::mw_require_jwt(ok_ctx, secret), 1, "valid token accepted")
+    let claims = ok_ctx.data["jwt_claims"]
+    runner_assert(r, claims is not null, "claims stored")
+    runner_assert_str_eq(r, str_from_ptr(claims["sub"]), "u1", "sub claim preserved")
+
+    # 2. Wrong secret is rejected with a Bearer challenge
+    let bad_ctx = http::ctx_new(http::request_create("GET", "/me"))
+    http::header_set(bad_ctx.req.headers, "Authorization", "Bearer " + token)
+    runner_assert_eq(r, http::mw_require_jwt(bad_ctx, "other-secret"), 0, "wrong secret rejected")
+    runner_assert_eq(r, bad_ctx.res.status_code, 401, "reject status 401")
+    runner_assert_eq(r, bad_ctx.aborted, 1, "reject aborts")
+    runner_assert_str_eq(r, http::header_get(bad_ctx.res.headers, "WWW-Authenticate"), "Bearer error=\"invalid_token\"", "challenge header")
+
+    # 3. Missing and malformed tokens are rejected
+    let missing = http::ctx_new(http::request_create("GET", "/me"))
+    runner_assert_eq(r, http::mw_require_jwt(missing, secret), 0, "missing token rejected")
+    let malformed_req = http::request_create("GET", "/me")
+    http::header_set(malformed_req.headers, "Authorization", "Bearer not.a.token")
+    let malformed = http::ctx_new(malformed_req)
+    runner_assert_eq(r, http::mw_require_jwt(malformed, secret), 0, "malformed token rejected")
+
+    # 4. Expired tokens are rejected (beyond the leeway window)
+    let old_token = jwt_pkg::sign({"sub": "u1"}, secret, -3600)
+    let exp_req = http::request_create("GET", "/me")
+    http::header_set(exp_req.headers, "Authorization", "Bearer " + old_token)
+    let exp_ctx = http::ctx_new(exp_req)
+    runner_assert_eq(r, http::mw_require_jwt(exp_ctx, secret), 0, "expired token rejected")
+
+    # 5. Server-level JWT enforcement guards routes
+    let rt = http::router()
+    http::router_get(rt, "/me", "show_me")
+    let s = http::server_new(19887, "127.0.0.1", rt)
+    http::server_enable_jwt_auth(s, secret)
+    let denied = http::ctx_new(http::request_create("GET", "/me"))
+    let m_denied = http::server_process(s, denied)
+    runner_assert_eq(r, m_denied.status, 401, "server denies anonymous")
+    let allowed_req = http::request_create("GET", "/me")
+    http::header_set(allowed_req.headers, "Authorization", "Bearer " + token)
+    let allowed = http::ctx_new(allowed_req)
+    let m_allowed = http::server_process(s, allowed)
+    runner_assert_eq(r, m_allowed.found, 1, "server lets valid token through")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+@cfg(not(feature = "jwt"))
+function main()
+    test_suite("HTTP JWT Middleware Tests (skipped without jwt feature)")
+    let r = runner_new()
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

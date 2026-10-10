@@ -4,6 +4,8 @@
 import "crypto" as crypto
 import "../types.alya"
 import "../core/headers.alya"
+@cfg(feature = "jwt")
+import "jwt" as jwt_pkg
 
 ## Extracts the `user:password` pair from an HTTP Basic Authorization header.
 ## Returns a map `{"user": ..., "pass": ...}`, or null when the request
@@ -93,6 +95,46 @@ pub function mw_require_bearer(ctx: HttpContext, exp_token: string) -> int
         res.status_code = 401
         res.status_text = "Unauthorized"
         header_set(res.headers, "WWW-Authenticate", "Bearer")
+        header_set(res.headers, "Content-Type", "application/json; charset=utf-8")
+        res.body = "{\"error\": \"Unauthorized\"}"
+        ctx.aborted = 1
+    end
+    return 0
+end
+
+## Enforces JWT (RFC 7519, HS256) authentication on an HttpContext.
+## Verifies the Bearer token signature and standard claims against
+## `secret` with `leeway_sec` clock-skew tolerance. Returns 1 and stores
+## the decoded claims under `ctx.data["jwt_claims"]` when valid, otherwise
+## responds 401 with a `Bearer error="invalid_token"` challenge, aborts
+## the context, and returns 0.
+##
+## Requires the `jwt` feature (default-on).
+@cfg(feature = "jwt")
+pub function mw_require_jwt(ctx: HttpContext, secret: string, leeway_sec: int = 60) -> int
+    let done = 0
+    if ctx is not null
+        let token = auth_bearer_token(ctx)
+        if token != ""
+            let opts = jwt_pkg::options(leeway_sec)
+            let verified = jwt_pkg::verify_with_options(token, secret, opts)
+            if verified.valid == true
+                if ctx.data is null
+                    ctx.data = {}
+                end
+                ctx.data["jwt_claims"] = verified.payload
+                done = 1
+            end
+        end
+    end
+    if done == true
+        return 1
+    end
+    if ctx is not null and ctx.res is not null
+        let res = ctx.res
+        res.status_code = 401
+        res.status_text = "Unauthorized"
+        header_set(res.headers, "WWW-Authenticate", "Bearer error=\"invalid_token\"")
         header_set(res.headers, "Content-Type", "application/json; charset=utf-8")
         res.body = "{\"error\": \"Unauthorized\"}"
         ctx.aborted = 1

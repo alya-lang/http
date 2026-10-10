@@ -1,0 +1,68 @@
+## Test suite for trusted-proxy forwarding (client IP and scheme)
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+import "std/test"
+import "../src/lib.alya" as http
+
+function main()
+    test_suite("HTTP Forwarded Tests")
+    let r = runner_new()
+
+    # 1. X-Forwarded-For wins, first entry is the client
+    let req1 = http::request_create("GET", "/t", "", {}, "", "10.9.9.9")
+    http::header_set(req1.headers, "X-Forwarded-For", "1.2.3.4, 10.0.0.1, 10.0.0.2")
+    let ctx1 = http::ctx_new(req1)
+    runner_assert_str_eq(r, http::ctx_client_ip(ctx1), "1.2.3.4", "first forwarded entry")
+
+    # 2. Single entry and X-Real-IP fallbacks
+    let req2 = http::request_create("GET", "/t", "", {}, "", "10.9.9.9")
+    http::header_set(req2.headers, "X-Forwarded-For", "5.6.7.8")
+    runner_assert_str_eq(r, http::ctx_client_ip(http::ctx_new(req2)), "5.6.7.8", "single forwarded entry")
+    let req3 = http::request_create("GET", "/t", "", {}, "", "10.9.9.9")
+    http::header_set(req3.headers, "X-Real-IP", "9.9.9.9")
+    runner_assert_str_eq(r, http::ctx_client_ip(http::ctx_new(req3)), "9.9.9.9", "real ip fallback")
+    let ctx4 = http::ctx_new(http::request_create("GET", "/t", "", {}, "", "10.9.9.9"))
+    runner_assert_str_eq(r, http::ctx_client_ip(ctx4), "10.9.9.9", "socket fallback")
+
+    # 3. Scheme resolution prefers X-Forwarded-Proto
+    let req5 = http::request_create("GET", "/t")
+    http::header_set(req5.headers, "X-Forwarded-Proto", "https")
+    runner_assert_str_eq(r, http::ctx_scheme(http::ctx_new(req5)), "https", "forwarded proto")
+    let ctx6 = http::ctx_new(http::request_create("GET", "/t"))
+    runner_assert_str_eq(r, http::ctx_scheme(ctx6), "http", "plain default")
+
+    # 4. server_process rewrites identity only when forwarding is enabled
+    let rt = http::router()
+    http::router_get(rt, "/t", "show_t")
+    let plain = http::server_new(9881, "127.0.0.1", rt)
+    let fwd_req = http::request_create("GET", "/t", "", {}, "", "10.9.9.9")
+    http::header_set(fwd_req.headers, "X-Forwarded-For", "1.2.3.4")
+    let ctx_plain = http::ctx_new(fwd_req)
+    http::server_process(plain, ctx_plain)
+    runner_assert_str_eq(r, ctx_plain.req.remote_addr, "10.9.9.9", "untrusted proxy headers ignored")
+
+    let fwd = http::server_new(9882, "127.0.0.1", rt)
+    http::server_enable_forwarded(fwd, 1)
+    http::server_enable_rate_limit(fwd, 1, 60000)
+    let fwd_req2 = http::request_create("GET", "/t", "", {}, "", "10.9.9.9")
+    http::header_set(fwd_req2.headers, "X-Forwarded-For", "1.2.3.4")
+    let ctx_fwd = http::ctx_new(fwd_req2)
+    let m_fwd = http::server_process(fwd, ctx_fwd)
+    runner_assert_eq(r, m_fwd.found, 1, "forwarded request passes")
+    runner_assert_str_eq(r, ctx_fwd.req.remote_addr, "1.2.3.4", "identity rewritten")
+    # Rate limiting now keys on the forwarded IP, not the socket peer
+    let fwd_req3 = http::request_create("GET", "/t", "", {}, "", "10.9.9.9")
+    http::header_set(fwd_req3.headers, "X-Forwarded-For", "1.2.3.4")
+    let m_throttled = http::server_process(fwd, http::ctx_new(fwd_req3))
+    runner_assert_eq(r, m_throttled.status, 429, "second hit from same forwarded IP throttled")
+    let other_req = http::request_create("GET", "/t", "", {}, "", "10.9.9.9")
+    http::header_set(other_req.headers, "X-Forwarded-For", "9.9.9.9")
+    let m_other = http::server_process(fwd, http::ctx_new(other_req))
+    runner_assert_eq(r, m_other.found, 1, "different forwarded IP passes")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()
