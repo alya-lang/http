@@ -79,7 +79,9 @@ function main()
     say "Parsed Body: " + parsed.body
 
     # 5. HTTP Compression & Encoding Negotiation
+    @cfg(feature = "compress")
     let payload = "{\"status\":\"ok\",\"description\":\"Alya HTTP provides native compression supporting Brotli, Zstandard, Gzip, and Deflate for modern web APIs.\"}"
+    @cfg(feature = "compress")
     demo_compression(payload)
 end
 

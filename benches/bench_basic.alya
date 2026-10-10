@@ -8,91 +8,102 @@ function dummy_handler(ctx)
     return http::ctx_json(ctx, "{\"ok\":true}", 200)
 end
 
-let runner = bench_runner("alya-lang/http Micro-Benchmarks")
+function bench_core(runner)
+    # 1. Response serialization & status text resolution
+    bench_start(runner, 100000)
+    let i = 0
+    while i < 100000
+        let txt = http::http_status_text(200)
+        let is_ok = http::http_is_success(200)
+        i += 1
+    end
+    bench_stop(runner, "Status text & code checks (100k)")
+    # 2. HTTP response parsing (Status line + headers + body)
+    let raw = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 15\r\n\r\n{\"status\":\"ok\"}"
+    bench_start(runner, 50000)
+    let j = 0
+    while j < 50000
+        let resp = http::http_parse_response(raw)
+        j += 1
+    end
+    bench_stop(runner, "HTTP response parsing (50k)")
+    # 3. Router route registration & dispatch matching
+    let r = http::router()
+    http::router_get(r, "/api/v1/users", dummy_handler)
+    http::router_get(r, "/api/v1/users/:id", dummy_handler)
+    http::router_post(r, "/api/v1/users", dummy_handler)
+    http::router_get(r, "/api/v1/posts/:postId/comments/:commentId", dummy_handler)
 
-# 1. Response serialization & status text resolution
-bench_start(runner, 100000)
-let i = 0
-while i < 100000
-    let txt = http::http_status_text(200)
-    let is_ok = http::http_is_success(200)
-    i += 1
+    bench_start(runner, 50000)
+    let k = 0
+    while k < 50000
+        let match_res = http::router_match(r, "GET", "/api/v1/posts/42/comments/108")
+        k += 1
+    end
+    bench_stop(runner, "Router param matching (50k)")
+    # 4. Cookie creation and formatting
+    bench_start(runner, 50000)
+    let m = 0
+    while m < 50000
+        let c = http::cookie_new("session_token", "abc123xyz", "/", 3600, 1, 1, "Strict")
+        let str_cookie = http::cookie_format(c)
+        m += 1
+    end
+    bench_stop(runner, "Cookie create & format (50k)")
 end
-bench_stop(runner, "Status text & code checks (100k)")
 
-# 2. HTTP response parsing (Status line + headers + body)
-let raw = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 15\r\n\r\n{\"status\":\"ok\"}"
-bench_start(runner, 50000)
-let j = 0
-while j < 50000
-    let resp = http::http_parse_response(raw)
-    j += 1
+@cfg(feature = "compress")
+function bench_compression(runner)
+    # 5. HTTP Accept-Encoding negotiation
+    bench_start(runner, 50000)
+    let n = 0
+    let accept_hdr = "gzip, deflate, br;q=0.9, zstd;q=0.8"
+    while n < 50000
+        let negotiated = http::http_negotiate_encoding(accept_hdr)
+        n += 1
+    end
+    bench_stop(runner, "Encoding negotiation (50k)")
+    # 6. HTTP payload compression (Gzip, Deflate, Brotli, Zstd)
+    let bench_payload = "{\"status\":\"success\",\"message\":\"Alya HTTP high performance JSON response\",\"data\":[1,2,3,4,5,6,7,8,9,10]}"
+    bench_start(runner, 5000)
+    let p = 0
+    while p < 5000
+        let gz = http::compress(bench_payload, "gzip")
+        let br = http::compress(bench_payload, "br")
+        let def = http::compress(bench_payload, "deflate")
+        let zst = http::compress(bench_payload, "zstd")
+        p += 1
+    end
+    bench_stop(runner, "HTTP compression Gzip/Br/Def/Zst (5k x 4 = 20k)")
+    # 7. HTTP payload decompression (Gzip, Deflate, Brotli, Zstd)
+    let gz_sample = http::compress(bench_payload, "gzip")
+    let br_sample = http::compress(bench_payload, "br")
+    let def_sample = http::compress(bench_payload, "deflate")
+    let zst_sample = http::compress(bench_payload, "zstd")
+
+    bench_start(runner, 5000)
+    let q = 0
+    while q < 5000
+        let r1 = http::decompress(gz_sample, "gzip")
+        let r2 = http::decompress(br_sample, "br")
+        let r3 = http::decompress(def_sample, "deflate")
+        let r4 = http::decompress(zst_sample, "zstd")
+        q += 1
+    end
+    bench_stop(runner, "HTTP decompression Gzip/Br/Def/Zst (5k x 4 = 20k)")
 end
-bench_stop(runner, "HTTP response parsing (50k)")
 
-# 3. Router route registration & dispatch matching
-let r = http::router()
-http::router_get(r, "/api/v1/users", dummy_handler)
-http::router_get(r, "/api/v1/users/:id", dummy_handler)
-http::router_post(r, "/api/v1/users", dummy_handler)
-http::router_get(r, "/api/v1/posts/:postId/comments/:commentId", dummy_handler)
-
-bench_start(runner, 50000)
-let k = 0
-while k < 50000
-    let match_res = http::router_match(r, "GET", "/api/v1/posts/42/comments/108")
-    k += 1
+@cfg(not(feature = "compress"))
+function bench_compression(runner)
 end
-bench_stop(runner, "Router param matching (50k)")
 
-# 4. Cookie creation and formatting
-bench_start(runner, 50000)
-let m = 0
-while m < 50000
-    let c = http::cookie_new("session_token", "abc123xyz", "/", 3600, 1, 1, "Strict")
-    let str_cookie = http::cookie_format(c)
-    m += 1
+function main()
+    let runner = bench_runner("alya-lang/http Micro-Benchmarks")
+
+    bench_core(runner)
+    bench_compression(runner)
+
+    bench_summary(runner)
 end
-bench_stop(runner, "Cookie create & format (50k)")
 
-# 5. HTTP Accept-Encoding negotiation
-bench_start(runner, 50000)
-let n = 0
-let accept_hdr = "gzip, deflate, br;q=0.9, zstd;q=0.8"
-while n < 50000
-    let negotiated = http::http_negotiate_encoding(accept_hdr)
-    n += 1
-end
-bench_stop(runner, "Encoding negotiation (50k)")
-
-# 6. HTTP payload compression (Gzip, Deflate, Brotli, Zstd)
-let bench_payload = "{\"status\":\"success\",\"message\":\"Alya HTTP high performance JSON response\",\"data\":[1,2,3,4,5,6,7,8,9,10]}"
-bench_start(runner, 5000)
-let p = 0
-while p < 5000
-    let gz = http::compress(bench_payload, "gzip")
-    let br = http::compress(bench_payload, "br")
-    let def = http::compress(bench_payload, "deflate")
-    let zst = http::compress(bench_payload, "zstd")
-    p += 1
-end
-bench_stop(runner, "HTTP compression Gzip/Br/Def/Zst (5k x 4 = 20k)")
-
-# 7. HTTP payload decompression (Gzip, Deflate, Brotli, Zstd)
-let gz_sample = http::compress(bench_payload, "gzip")
-let br_sample = http::compress(bench_payload, "br")
-let def_sample = http::compress(bench_payload, "deflate")
-let zst_sample = http::compress(bench_payload, "zstd")
-
-bench_start(runner, 5000)
-let q = 0
-while q < 5000
-    let r1 = http::decompress(gz_sample, "gzip")
-    let r2 = http::decompress(br_sample, "br")
-    let r3 = http::decompress(def_sample, "deflate")
-    let r4 = http::decompress(zst_sample, "zstd")
-    q += 1
-end
-bench_stop(runner, "HTTP decompression Gzip/Br/Def/Zst (5k x 4 = 20k)")
-
-bench_summary(runner)
+main()
