@@ -7,9 +7,10 @@ import "./router.alya"
 ## Invokes the handler function carried by a RouteMatch on the given context.
 ## Returns 1 when a handler was invoked, 0 otherwise (no match, aborted
 ## context, or legacy string action without a handler function).
-## Legacy string actions are never invoked: calling a string value as a
-## function crashes the runtime, so dispatch only trusts the `handler`
-## field populated by `router_on` and its per-method shortcuts.
+## Legacy string actions are never invoked: dispatch only trusts the
+## `handler` field populated by `router_on` and its per-method shortcuts
+## (calling a non-function value raises a catchable `value is not callable`
+## error since alya-lang/alya#154; dispatch stays explicit by design).
 pub function router_dispatch_match(m: RouteMatch, ctx: HttpContext) -> int
     if m is null or ctx is null
         return 0
