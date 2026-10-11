@@ -1,6 +1,7 @@
 ## TEMPORARY diagnostic for alya-lang/alya#166 (REMOVE after diagnosis).
-## Isolates tcp_poll (select): no client connects, so poll must time
-## out and return false. If THIS faults, fn_net_poll/select is guilty.
+## Accept without read: connect, poll (must be ready), accept, close.
+## If THIS faults, tcp_accept is guilty; if it passes, the fault is in
+## server_read_request/recv.
 import "std/test"
 import "std/net" as net
 import "../src/lib.alya" as http
@@ -9,13 +10,19 @@ function main()
     test_suite("dbg166")
     let r = runner_new()
 
-    let srv3 = http::server_new(19999, "127.0.0.1", null)
-    http::server_start(srv3)
-    runner_assert_true(r, true, "DBG166 poll-started")
-    let ready = net::tcp_poll(srv3.server_sock, 2000)
-    runner_assert(r, ready != true, "DBG166 poll-times-out")
-    http::server_close(srv3)
-    runner_assert_true(r, true, "DBG166 poll-done")
+    let srv = http::server_new(19999, "127.0.0.1", null)
+    http::server_start(srv)
+    runner_assert_true(r, true, "DBG166 accept-started")
+    let sock = net::tcp_connect("127.0.0.1", 19999)
+    runner_assert_true(r, true, "DBG166 accept-connected")
+    let ready = net::tcp_poll(srv.server_sock, 3000)
+    runner_assert(r, ready == true, "DBG166 accept-ready")
+    let client = net::tcp_accept(srv.server_sock)
+    runner_assert(r, client >= 0, "DBG166 accept-accepted")
+    net::tcp_close(client)
+    net::tcp_close(sock)
+    http::server_close(srv)
+    runner_assert_true(r, true, "DBG166 accept-done")
 
     let failed = runner_summary(r)
     if failed > 0
