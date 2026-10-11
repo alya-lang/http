@@ -11,14 +11,12 @@ function main()
     let r = runner_new()
 
     # Section 4 shape: traffic then close.
-    # BISECT-2: no closes in s4 (tests whether server_close/tcp_close
-    # corrupts state for the next server).
+    # BISECT-3: s4 = new+start only, no connect at all (tests whether a
+    # prior TCP connect is required to corrupt the next connect).
     let srv2 = http::server_new(19996, "127.0.0.1", http::router())
     http::server_enable_limits(srv2, 1024, 64)
     http::server_start(srv2)
     runner_assert_true(r, true, "DBG166 s4-started")
-    let _sock3 = net::tcp_connect("127.0.0.1", 19996)
-    runner_assert_true(r, true, "DBG166 s4-connected")
 
     # Section 5 shape.
     let srv3 = http::server_new(19997, "127.0.0.1", http::router())
