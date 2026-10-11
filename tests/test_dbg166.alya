@@ -1,22 +1,48 @@
 ## TEMPORARY diagnostic for alya-lang/alya#166 (REMOVE after diagnosis).
-## Isolates the win-arm64 AV: each step prints before/after so the CI log
-## pins the faulting call. Uses a private port to avoid cross-talk.
+## Stage 2: sections 4+5 combined — section 4's HTTP traffic may corrupt
+## state that section 5 trips over. Asserts surface progress; the CI log
+## pins the faulting step.
+import "std/test"
 import "std/net" as net
 import "../src/lib.alya" as http
 
 function main()
-    say "DBG166 new-before"
-    let srv = http::server_new(19999, "127.0.0.1", http::router())
-    say "DBG166 new-after"
-    http::server_enable_timeout(srv, 400)
-    say "DBG166 timeout-after"
-    let rc = http::server_start(srv)
-    say "DBG166 start-after rc=" + str(rc)
-    let sock = net::tcp_connect("127.0.0.1", 19999)
-    say "DBG166 connect-after sock=" + str(sock)
-    net::tcp_close(sock)
-    http::server_close(srv)
-    say "DBG166 done-ok"
+    test_suite("dbg166")
+    let r = runner_new()
+
+    # Section 4 shape: traffic then close.
+    let srv2 = http::server_new(19892, "127.0.0.1", http::router())
+    http::server_enable_limits(srv2, 1024, 64)
+    http::server_start(srv2)
+    runner_assert_true(r, true, "DBG166 s4-started")
+    let sock3 = net::tcp_connect("127.0.0.1", 19892)
+    net::tcp_set_timeout(sock3, 5000)
+    net::tcp_send(sock3, "POST /ok HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello")
+    let ctx_ok = http::server_accept(srv2, 3000)
+    runner_assert(r, ctx_ok is not null, "DBG166 s4-accepted")
+    runner_assert_str_eq(r, ctx_ok.req.body, "hello", "DBG166 s4-body")
+    net::tcp_close(sock3)
+    http::server_close(srv2)
+    runner_assert_true(r, true, "DBG166 s4-closed")
+
+    # Section 5 shape.
+    let srv3 = http::server_new(19893, "127.0.0.1", http::router())
+    http::server_enable_timeout(srv3, 400)
+    runner_assert_true(r, true, "DBG166 s5-configured")
+    http::server_start(srv3)
+    runner_assert_true(r, true, "DBG166 s5-started")
+    let sock4 = net::tcp_connect("127.0.0.1", 19893)
+    net::tcp_set_timeout(sock4, 5000)
+    let ctx_stalled = http::server_accept(srv3, 3000)
+    runner_assert(r, ctx_stalled is null, "DBG166 s5-stalled-null")
+    net::tcp_close(sock4)
+    http::server_close(srv3)
+    runner_assert_true(r, true, "DBG166 s5-done")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        say f"Test failure: {failed} test(s) failed."
+    end
 end
 
 main()
