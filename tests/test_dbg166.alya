@@ -7,7 +7,7 @@ import "../src/lib.alya" as http
 
 function main()
     say "DBG166 new-before"
-    let srv = http::server_new(19999, "127.0.0.1", http::router())
+    let srv = http::server_new(19999, "127.0.0.1", null)
     say "DBG166 new-after"
     http::server_enable_timeout(srv, 400)
     say "DBG166 timeout-after"
