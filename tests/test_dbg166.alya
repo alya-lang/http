@@ -15,9 +15,10 @@ function main()
     # in the very first repro).
 
     # Section 5 shape.
-    # BISECT-6: no enable_timeout in s5 (tests whether the options-map
-    # write is required alongside the double construction).
+    # BISECT-9: enable_timeout back (closest to the very first passing
+    # repro, which had it).
     let srv3 = http::server_new(19997, "127.0.0.1", http::router())
+    http::server_enable_timeout(srv3, 400)
     runner_assert_true(r, true, "DBG166 s5-new")
     http::server_start(srv3)
     runner_assert_true(r, true, "DBG166 s5-started")
