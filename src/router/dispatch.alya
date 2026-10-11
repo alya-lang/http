@@ -33,7 +33,7 @@ end
 ## context request, and invokes the matched handler function when present.
 ## Returns the RouteMatch so callers can inspect status for 404/405 handling.
 pub function router_dispatch(r: HttpRouter, method, path: string, ctx: HttpContext) -> RouteMatch
-    let m = router_match(r, method, path)
+    let m: RouteMatch = router_match(r, method, path)
     if m.found == true and ctx is not null and ctx.req is not null
         let req = ctx.req
         req.params = m.params

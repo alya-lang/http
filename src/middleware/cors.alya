@@ -2,6 +2,7 @@
 ## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
 import "../core/headers.alya"
+import "../types.alya"
 
 ## Configuration options for Cross-Origin Resource Sharing (CORS).
 ##
@@ -32,7 +33,7 @@ end
 
 ## Applies CORS headers to HttpContext and handles preflight OPTIONS requests.
 ## Returns 1 if request was preflight and aborted, 0 if request should continue.
-pub function mw_apply_cors(ctx, config = null)
+pub function mw_apply_cors(ctx: HttpContext, config: CorsConfig = null)
     if ctx is null
         return false
     end

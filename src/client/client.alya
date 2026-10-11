@@ -25,7 +25,7 @@ pub function client_new(timeout_ms: int = 10000, follow_redirects: int = 1, max_
 end
 
 ## Sets a default header on the client
-pub function client_set_header(client, key: string, val)
+pub function client_set_header(client: HttpClient, key: string, val)
     if client is not null
         header_set(client.headers, key, val)
     end
@@ -33,7 +33,7 @@ pub function client_set_header(client, key: string, val)
 end
 
 ## Toggles HTTPS certificate verification (1 required, 0 skipped for local dev)
-pub function client_set_tls_verify(client, verify: int)
+pub function client_set_tls_verify(client: HttpClient, verify: int)
     if client is not null
         if verify == false
             client.tls_verify = 0
@@ -184,7 +184,7 @@ pub function client_execute(client: HttpClient, method, url_str: string, extra_h
     end
 
     net::tcp_close(sock)
-    let resp = http_parse_response(raw_resp)
+    let resp: HttpResponse = http_parse_response(raw_resp)
 
     # Handle HTTP redirects if configured
     if follow == 1 and http_is_redirect(resp.status_code) and max_redirs > 0
@@ -350,7 +350,7 @@ pub function client_execute_bytes(client: HttpClient, method, url_str: string, e
     end
 
     net::tcp_close(sock)
-    let resp = http_parse_response_bytes(raw_resp)
+    let resp: HttpResponse = http_parse_response_bytes(raw_resp)
 
     # Handle HTTP redirects if configured
     if follow == 1 and http_is_redirect(resp.status_code) and max_redirs > 0

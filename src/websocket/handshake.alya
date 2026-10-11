@@ -4,6 +4,7 @@
 import "std/str"
 import "crypto" as crypto
 import "../core/headers.alya"
+import "../types.alya"
 
 ## RFC 6455 Magic GUID constant.
 pub const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -30,7 +31,7 @@ pub function ws_accept_key(sec_key: string) -> string
 end
 
 ## Determines whether the given HttpRequest is a valid WebSocket upgrade request.
-pub function ws_is_upgrade_request(req)
+pub function ws_is_upgrade_request(req: HttpRequest)
     if req is null or req.headers is null
         return false
     end
@@ -50,7 +51,7 @@ pub function ws_is_upgrade_request(req)
 end
 
 ## Builds the HTTP 101 Switching Protocols handshake wire response.
-pub function ws_handshake_response(req, subprotocol: string = "")
+pub function ws_handshake_response(req: HttpRequest, subprotocol: string = "")
     let sec_key = header_get(req.headers, "Sec-WebSocket-Key")
     let accept_key = ws_accept_key(sec_key)
 

@@ -2,9 +2,10 @@
 ## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
 import "../core/headers.alya"
+import "../types.alya"
 
 ## Formats a safe JSON error response and sets 500 status code.
-pub function mw_apply_recovery(ctx, err_message: string = "Internal Server Error")
+pub function mw_apply_recovery(ctx: HttpContext, err_message: string = "Internal Server Error")
     if ctx is null or ctx.res is null
         return null
     end

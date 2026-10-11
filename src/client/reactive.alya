@@ -71,7 +71,7 @@ pub function _ws_client_generate_key() -> string
 end
 
 ## Callback invoked when data arrives on a reactive HTTP client stream.
-pub function _on_reactive_client_resp_data(stream, chunk: string)
+pub function _on_reactive_client_resp_data(stream: TcpStream, chunk: string)
     if stream is null or chunk is null or len(chunk) == 0
         return false
     end
@@ -154,7 +154,7 @@ pub function _on_reactive_client_resp_data(stream, chunk: string)
 end
 
 ## Callback invoked when a reactive HTTP client stream closes.
-pub function _on_reactive_client_resp_close(stream)
+pub function _on_reactive_client_resp_close(stream: TcpStream)
     if stream is null
         return false
     end
@@ -319,7 +319,7 @@ pub function client_reactive_delete(loop, url_str: string, headers = null, on_re
 end
 
 ## Callback invoked when data arrives on a reactive WebSocket client stream.
-pub function _on_reactive_ws_client_data(stream, chunk: string)
+pub function _on_reactive_ws_client_data(stream: TcpStream, chunk: string)
     if stream is null or chunk is null or len(chunk) == 0
         return false
     end
@@ -400,7 +400,7 @@ pub function _on_reactive_ws_client_data(stream, chunk: string)
 end
 
 ## Callback invoked when a reactive WebSocket client stream closes.
-pub function _on_reactive_ws_client_close(stream)
+pub function _on_reactive_ws_client_close(stream: TcpStream)
     if stream is null
         return false
     end
@@ -526,7 +526,7 @@ function _sse_dispatch_buffered(sse_obj: ReactiveSseClient) -> int
 end
 
 ## Callback invoked when data arrives on a reactive SSE client stream.
-pub function _on_reactive_sse_client_data(stream, chunk: string)
+pub function _on_reactive_sse_client_data(stream: TcpStream, chunk: string)
     if stream is null or chunk is null or len(chunk) == 0
         return false
     end
@@ -580,7 +580,7 @@ pub function _on_reactive_sse_client_data(stream, chunk: string)
 end
 
 ## Callback invoked when a reactive SSE client stream is closed.
-pub function _on_reactive_sse_client_close(stream)
+pub function _on_reactive_sse_client_close(stream: TcpStream)
     if stream is null
         return false
     end
@@ -726,7 +726,7 @@ end
 ## Callback invoked when byte-array data arrives on a reactive binary
 ## WebSocket client stream. Mirrors the text handshake, then feeds frames
 ## through the bytes wire path (NUL-safe).
-pub function _on_reactive_ws_bytes_data(stream, chunk)
+pub function _on_reactive_ws_bytes_data(stream: TcpStream, chunk)
     if stream is null or chunk is null or len(chunk) == 0
         return false
     end
@@ -805,7 +805,7 @@ pub function _on_reactive_ws_bytes_data(stream, chunk)
 end
 
 ## Callback invoked when a reactive binary WebSocket client stream closes.
-pub function _on_reactive_ws_bytes_close(stream)
+pub function _on_reactive_ws_bytes_close(stream: TcpStream)
     if stream is null
         return false
     end

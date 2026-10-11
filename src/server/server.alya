@@ -483,7 +483,7 @@ end
 # Processes common middlewares (request ID, CORS, auth, rate limit,
 # static files) and matches route on HttpContext
 ## Returns the RouteMatch result
-pub function server_process(server, ctx: HttpContext)
+pub function server_process(server: HttpServer, ctx: HttpContext)
     if server is null or ctx is null
         return RouteMatch { found: 0, action: "not_found", handler: null, route: "", params: {}, status: 404, allowed_methods: [] }
     end
@@ -552,7 +552,7 @@ pub function server_process(server, ctx: HttpContext)
     end
 
     # Route matching
-    let m = router_match(server.router, ctx.req.method, ctx.req.path)
+    let m: RouteMatch = router_match(server.router, ctx.req.method, ctx.req.path)
     if m.found == true
         let req = ctx.req
         req.params = m.params
@@ -576,7 +576,7 @@ end
 ## Keeps the client connection open when `server_should_keep_alive` holds
 ## (plaintext + enabled + client did not ask for close); otherwise closes it.
 ## TLS contexts send through the encrypted channel and always close.
-pub function server_send(server, ctx)
+pub function server_send(server: HttpServer, ctx: HttpContext)
     if ctx is null or ctx.client_sock < 0
         return false
     end

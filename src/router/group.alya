@@ -23,57 +23,57 @@ pub function group_new(router, prefix: string)
 end
 
 ## Registers a GET route in this group
-pub function group_get(g, pattern: string, action)
+pub function group_get(g: RouteGroup, pattern: string, action)
     return router_group_add(g.router, g.prefix, "GET", pattern, action)
 end
 
 ## Registers a POST route in this group
-pub function group_post(g, pattern: string, action)
+pub function group_post(g: RouteGroup, pattern: string, action)
     return router_group_add(g.router, g.prefix, "POST", pattern, action)
 end
 
 ## Registers a PUT route in this group
-pub function group_put(g, pattern: string, action)
+pub function group_put(g: RouteGroup, pattern: string, action)
     return router_group_add(g.router, g.prefix, "PUT", pattern, action)
 end
 
 ## Registers a DELETE route in this group
-pub function group_delete(g, pattern: string, action)
+pub function group_delete(g: RouteGroup, pattern: string, action)
     return router_group_add(g.router, g.prefix, "DELETE", pattern, action)
 end
 
 ## Registers a PATCH route in this group
-pub function group_patch(g, pattern: string, action)
+pub function group_patch(g: RouteGroup, pattern: string, action)
     return router_group_add(g.router, g.prefix, "PATCH", pattern, action)
 end
 
 ## Registers a HEAD route in this group
-pub function group_head(g, pattern: string, action)
+pub function group_head(g: RouteGroup, pattern: string, action)
     return router_group_add(g.router, g.prefix, "HEAD", pattern, action)
 end
 
 ## Registers an OPTIONS route in this group
-pub function group_options(g, pattern: string, action)
+pub function group_options(g: RouteGroup, pattern: string, action)
     return router_group_add(g.router, g.prefix, "OPTIONS", pattern, action)
 end
 
 ## Registers a QUERY route in this group (IETF safe method with request body)
-pub function group_query(g, pattern: string, action)
+pub function group_query(g: RouteGroup, pattern: string, action)
     return router_group_add(g.router, g.prefix, "QUERY", pattern, action)
 end
 
 ## Registers an ANY route in this group
-pub function group_any(g, pattern: string, action)
+pub function group_any(g: RouteGroup, pattern: string, action)
     return router_group_add(g.router, g.prefix, "ANY", pattern, action)
 end
 
 ## Registers a handler-function route in this group for any HTTP method
-pub function group_on(g, method, pattern: string, handler)
+pub function group_on(g: RouteGroup, method, pattern: string, handler)
     return router_group_on(g.router, g.prefix, method, pattern, handler)
 end
 
 ## Creates a nested sub-group under this group prefix
-pub function group_subgroup(g, sub_prefix: string)
+pub function group_subgroup(g: RouteGroup, sub_prefix: string)
     let full_prefix = _router_join_prefix(g.prefix, sub_prefix)
     return group_new(g.router, full_prefix)
 end

@@ -3,6 +3,7 @@
 
 import "../core/headers.alya"
 import "../core/compression.alya"
+import "../types.alya"
 
 ## Configuration for response compression middleware.
 ##
@@ -24,7 +25,7 @@ end
 
 ## Applies HTTP compression to HttpContext response based on request Accept-Encoding.
 ## Returns 1 if compression was applied, 0 otherwise.
-pub function mw_apply_compression(ctx, config = null)
+pub function mw_apply_compression(ctx: HttpContext, config = null)
     if ctx is null or ctx.res is null or ctx.req is null
         return false
     end
