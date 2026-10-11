@@ -11,16 +11,13 @@ function main()
     let r = runner_new()
 
     # Section 4 shape: traffic then close.
+    # BISECT-1: connect/close only, no send/accept (tests whether the
+    # HTTP roundtrip corrupts state for the next server).
     let srv2 = http::server_new(19996, "127.0.0.1", http::router())
     http::server_enable_limits(srv2, 1024, 64)
     http::server_start(srv2)
     runner_assert_true(r, true, "DBG166 s4-started")
     let sock3 = net::tcp_connect("127.0.0.1", 19996)
-    net::tcp_set_timeout(sock3, 5000)
-    net::tcp_send(sock3, "POST /ok HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 5\r\nConnection: close\r\n\r\nhello")
-    let ctx_ok = http::server_accept(srv2, 3000)
-    runner_assert(r, ctx_ok is not null, "DBG166 s4-accepted")
-    runner_assert_str_eq(r, ctx_ok.req.body, "hello", "DBG166 s4-body")
     net::tcp_close(sock3)
     http::server_close(srv2)
     runner_assert_true(r, true, "DBG166 s4-closed")
