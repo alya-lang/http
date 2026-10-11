@@ -1,0 +1,22 @@
+## TEMPORARY diagnostic for alya-lang/alya#166 (REMOVE after diagnosis).
+## Isolates the win-arm64 AV: each step prints before/after so the CI log
+## pins the faulting call. Uses a private port to avoid cross-talk.
+import "std/net" as net
+import "../src/lib.alya" as http
+
+function main()
+    say "DBG166 new-before"
+    let srv = http::server_new(19999, "127.0.0.1", http::router())
+    say "DBG166 new-after"
+    http::server_enable_timeout(srv, 400)
+    say "DBG166 timeout-after"
+    let rc = http::server_start(srv)
+    say "DBG166 start-after rc=" + str(rc)
+    let sock = net::tcp_connect("127.0.0.1", 19999)
+    say "DBG166 connect-after sock=" + str(sock)
+    net::tcp_close(sock)
+    http::server_close(srv)
+    say "DBG166 done-ok"
+end
+
+main()
