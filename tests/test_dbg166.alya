@@ -11,11 +11,10 @@ function main()
     let r = runner_new()
 
     # Section 4 shape: traffic then close.
-    # BISECT-4: s4 = new+start only, no enable_limits (tests whether
-    # the limits options-map write corrupts the next server).
-    let srv2 = http::server_new(19996, "127.0.0.1", http::router())
-    http::server_start(srv2)
-    runner_assert_true(r, true, "DBG166 s4-started")
+    # BISECT-5: s4 = new only, no start (tests whether a second listen
+    # is required, or server construction alone corrupts).
+    let _srv2 = http::server_new(19996, "127.0.0.1", http::router())
+    runner_assert_true(r, true, "DBG166 s4-new")
 
     # Section 5 shape.
     let srv3 = http::server_new(19997, "127.0.0.1", http::router())
