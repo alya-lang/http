@@ -11,10 +11,9 @@ function main()
     let r = runner_new()
 
     # Section 4 shape: traffic then close.
-    # BISECT-3: s4 = new+start only, no connect at all (tests whether a
-    # prior TCP connect is required to corrupt the next connect).
+    # BISECT-4: s4 = new+start only, no enable_limits (tests whether
+    # the limits options-map write corrupts the next server).
     let srv2 = http::server_new(19996, "127.0.0.1", http::router())
-    http::server_enable_limits(srv2, 1024, 64)
     http::server_start(srv2)
     runner_assert_true(r, true, "DBG166 s4-started")
 
