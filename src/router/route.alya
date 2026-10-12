@@ -37,7 +37,7 @@ pub function route_split_path(path: string) -> array
 end
 
 ## Creates a new HttpRoute definition struct.
-pub function route_new(method, pattern: string, action)
+pub function route_new(method, pattern: string, action) -> HttpRoute
     let m = "GET"
     let raw_m = upper(trim(method))
     when raw_m
@@ -65,7 +65,7 @@ end
 ## Creates a new HttpRoute definition struct bound to a handler function.
 ## The handler is invoked with the matched `HttpContext` by `router_dispatch`.
 pub function route_new_handler(method, pattern: string, handler)
-    let rt = route_new(method, pattern, null)
+    let rt: HttpRoute = route_new(method, pattern, null)
     rt.handler = handler
     return rt
 end

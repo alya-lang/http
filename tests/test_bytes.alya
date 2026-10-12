@@ -32,12 +32,12 @@ struct MockBytes
     closed: int
 end
 
-function bmsg(conn, msg, _is_bin)
+function bmsg(conn: WebSocketConnection, msg, _is_bin)
     let s = conn.data
     push(s.messages, msg)
 end
 
-function bclose(conn, code, _reason)
+function bclose(conn: WebSocketConnection, code, _reason)
     let s = conn.data
     s.closed_code = code
 end
@@ -155,11 +155,13 @@ function main()
     let wparsed = http::ws_frame_parse_bytes(wenc, 0)
     runner_assert(r, wparsed[0] is not null, "binary byte frame parses")
     runner_assert_eq(r, wparsed[1], len(wenc), "binary byte frame consumes full wire")
-    runner_assert_eq(r, bytes_same(wparsed[0].payload, bin_payload), 1, "NUL payload survives masked roundtrip")
+    let wframe: WebSocketFrame = wparsed[0]
+    runner_assert_eq(r, bytes_same(wframe.payload, bin_payload), 1, "NUL payload survives masked roundtrip")
 
     let wenc_plain = http::ws_encode_binary_bytes(bin_payload, 0)
     let wparsed_plain = http::ws_frame_parse_bytes(wenc_plain, 0)
-    runner_assert_eq(r, bytes_same(wparsed_plain[0].payload, bin_payload), 1, "NUL payload survives unmasked roundtrip")
+    let wframe_plain: WebSocketFrame = wparsed_plain[0]
+    runner_assert_eq(r, bytes_same(wframe_plain.payload, bin_payload), 1, "NUL payload survives unmasked roundtrip")
 
     # Fragmented binary over feed_bytes with a NUL split across chunks.
     let mock = MockBytes { written: [], wire_bytes: [], closed: 0 }

@@ -47,14 +47,14 @@ end
 ## - `on_request_cb`: Request callback (or null).
 ## - `on_websocket_cb`: Upgrade callback (or null).
 pub struct ReactiveClientState
-    stream
-    server
+    stream: TcpStream
+    server: HttpServer
     buffer: string
     headers_parsed: int
-    req
+    req: HttpRequest
     content_length: int
     is_websocket: int
-    ws_conn
+    ws_conn: WebSocketConnection
     on_request_cb
     on_websocket_cb
 end
@@ -108,7 +108,7 @@ pub function _on_reactive_client_data(client_stream: TcpStream, chunk: string)
                 state.headers_parsed = true
 
                 let remote_addr = client_stream.peer_addr
-                let req = http_parse_request(header_str + "\r\n\r\n", remote_addr)
+                let req: HttpRequest = http_parse_request(header_str + "\r\n\r\n", remote_addr)
                 state.req = req
 
                 # --- Check for WebSocket Upgrade ---
@@ -123,7 +123,7 @@ pub function _on_reactive_client_data(client_stream: TcpStream, chunk: string)
 
                     # Dispatch WebSocket handler (function handlers first, legacy actions after)
                     let ws_handled = false
-                    let m = router_match(state.server.router, req.method, req.path)
+                    let m: RouteMatch = router_match(state.server.router, req.method, req.path)
                     if m.found == true and m.handler is not null
                         let h = m.handler
                         h(ws, req)
@@ -172,11 +172,11 @@ pub function _on_reactive_client_data(client_stream: TcpStream, chunk: string)
                 req.body = body_data
                 state.req = req
 
-                let res = response_create(200, "OK")
-                let ctx = context_create(req, res, client_stream.fd)
+                let res: HttpResponse = response_create(200, "OK")
+                let ctx: HttpContext = context_create(req, res, client_stream.fd)
 
                 # Apply server middlewares and router matching
-                let m = server_process(state.server, ctx)
+                let m: RouteMatch = server_process(state.server, ctx)
 
                 # Dispatch route handler (function handlers first, legacy actions after)
                 # or global request callback

@@ -12,7 +12,7 @@ function main()
     let msg1 = "Hello, WebSocket!"
     let wire1 = ws_encode_text(msg1, 0)
     let parsed1 = ws_frame_parse(wire1, 0)
-    let f1 = parsed1[0]
+    let f1: WebSocketFrame = parsed1[0]
     let consumed1 = parsed1[1]
 
     runner_assert_eq(r, f1 is not null, 1, "frame 1 parsed successfully")

@@ -84,7 +84,7 @@ pub function mw_apply_rate_limit(ctx: HttpContext, limiter: RateLimiter, key: st
         return 1
     end
     if ctx is not null and ctx.res is not null
-        let res = ctx.res
+        let res: HttpResponse = ctx.res
         res.status_code = 429
         res.status_text = "Too Many Requests"
         header_set(res.headers, "Retry-After", str(rate_limit_retry_after(limiter)))

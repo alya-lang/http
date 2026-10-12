@@ -42,7 +42,7 @@ import "./client/reactive.alya"
 # ═══════════════════════════════════════════════════════════════
 
 ## Creates an HTTP server on port and host.
-pub function server(port: int = 8080, host: string = "0.0.0.0", router_inst = null)
+pub function server(port: int = 8080, host: string = "0.0.0.0", router_inst = null) -> HttpServer
     return server_new(port, host, router_inst)
 end
 
@@ -62,7 +62,7 @@ pub function group(router_inst, prefix: string)
 end
 
 ## Creates a new HTTP client.
-pub function client(timeout_ms: int = 10000, follow_redirects: int = 1, max_redirects: int = 5, tls_verify: int = 1)
+pub function client(timeout_ms: int = 10000, follow_redirects: int = 1, max_redirects: int = 5, tls_verify: int = 1) -> HttpClient
     return client_new(timeout_ms, follow_redirects, max_redirects, tls_verify)
 end
 
@@ -82,7 +82,7 @@ pub function context(req, res = null, client_sock: int = -1)
 end
 
 ## Creates a new HttpContext instance with helper bindings.
-pub function ctx(req, res = null, client_sock: int = -1)
+pub function ctx(req, res = null, client_sock: int = -1) -> HttpContext
     return ctx_new(req, res, client_sock)
 end
 

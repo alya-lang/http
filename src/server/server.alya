@@ -28,7 +28,7 @@ import "../core/compression.alya"
 import "./context.alya"
 
 ## Creates a new HttpServer instance
-pub function server_new(port: int = 8080, host: string = "0.0.0.0", router = null)
+pub function server_new(port: int = 8080, host: string = "0.0.0.0", router = null) -> HttpServer
     if router is null
         router = router_new()
     end
@@ -306,7 +306,7 @@ end
 ## Returns an HttpContext instance, or null if no connection arrived or error.
 ## When TLS is enabled, terminates the TLS handshake first and reads the
 ## request through the encrypted channel.
-pub function server_accept(server, timeout_ms: int = 1000)
+pub function server_accept(server: HttpServer, timeout_ms: int = 1000) -> HttpContext
     if server is null or server.running == 0 or server.server_sock < 0
         return null
     end
@@ -379,7 +379,7 @@ end
 ## response is sent first, then the caller closes the socket).
 ## The socket is otherwise left open: the caller owns closing it. This is
 ## the reuse primitive behind keep-alive (`server_serve_once` loops on it).
-pub function server_read_request(client_sock: int, timeout_ms: int = 5000, max_header_size: int = 1048576, max_body_size: int = 8388608)
+pub function server_read_request(client_sock: int, timeout_ms: int = 5000, max_header_size: int = 1048576, max_body_size: int = 8388608) -> HttpContext
     if client_sock < 0
         return null
     end
@@ -483,7 +483,7 @@ end
 # Processes common middlewares (request ID, CORS, auth, rate limit,
 # static files) and matches route on HttpContext
 ## Returns the RouteMatch result
-pub function server_process(server: HttpServer, ctx: HttpContext)
+pub function server_process(server: HttpServer, ctx: HttpContext) -> RouteMatch
     if server is null or ctx is null
         return RouteMatch { found: 0, action: "not_found", handler: null, route: "", params: {}, status: 404, allowed_methods: [] }
     end
@@ -554,16 +554,16 @@ pub function server_process(server: HttpServer, ctx: HttpContext)
     # Route matching
     let m: RouteMatch = router_match(server.router, ctx.req.method, ctx.req.path)
     if m.found == true
-        let req = ctx.req
+        let req: HttpRequest = ctx.req
         req.params = m.params
     elif m.status == 405
-        let res = ctx.res
+        let res: HttpResponse = ctx.res
         res.status_code = 405
         res.status_text = "Method Not Allowed"
         header_set(res.headers, "Allow", join(m.allowed_methods, ", "))
         res.body = "Method Not Allowed"
     else
-        let res = ctx.res
+        let res: HttpResponse = ctx.res
         res.status_code = 404
         res.status_text = "Not Found"
         res.body = "Not Found"
@@ -655,7 +655,7 @@ pub function server_serve_once(server, timeout_ms: int = 1000, max_requests: int
     let sock = client_sock
     let ctx = server_read_request(sock, server.options["io_timeout_ms"], server.options["max_header_size"], server.options["max_body_size"])
     while ctx is not null
-        let m = server_process(server, ctx)
+        let m: RouteMatch = server_process(server, ctx)
         if ctx.aborted != true and m.found == true
             router_dispatch_match(m, ctx)
         elif ctx.aborted != true and m.found == false and on_request is not null

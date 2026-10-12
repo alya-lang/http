@@ -55,7 +55,7 @@ pub function mw_require_basic(ctx: HttpContext, exp_user: string, exp_pass: stri
         return 1
     end
     if ctx is not null and ctx.res is not null
-        let res = ctx.res
+        let res: HttpResponse = ctx.res
         res.status_code = 401
         res.status_text = "Unauthorized"
         header_set(res.headers, "WWW-Authenticate", "Basic realm=\"" + realm + "\"")
@@ -91,7 +91,7 @@ pub function mw_require_bearer(ctx: HttpContext, exp_token: string) -> int
         return 1
     end
     if ctx is not null and ctx.res is not null
-        let res = ctx.res
+        let res: HttpResponse = ctx.res
         res.status_code = 401
         res.status_text = "Unauthorized"
         header_set(res.headers, "WWW-Authenticate", "Bearer")
@@ -131,7 +131,7 @@ pub function mw_require_jwt(ctx: HttpContext, secret: string, leeway_sec: int = 
         return 1
     end
     if ctx is not null and ctx.res is not null
-        let res = ctx.res
+        let res: HttpResponse = ctx.res
         res.status_code = 401
         res.status_text = "Unauthorized"
         header_set(res.headers, "WWW-Authenticate", "Bearer error=\"invalid_token\"")

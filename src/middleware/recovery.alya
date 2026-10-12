@@ -10,7 +10,7 @@ pub function mw_apply_recovery(ctx: HttpContext, err_message: string = "Internal
         return null
     end
 
-    let res = ctx.res
+    let res: HttpResponse = ctx.res
     res.status_code = 500
     res.status_text = "Internal Server Error"
     header_set(res.headers, "Content-Type", "application/json; charset=utf-8")

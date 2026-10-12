@@ -42,7 +42,7 @@ pub function mw_apply_cors(ctx: HttpContext, config: CorsConfig = null)
         config = cors_config_new()
     end
 
-    let res = ctx.res
+    let res: HttpResponse = ctx.res
     header_set(res.headers, "Access-Control-Allow-Origin", config.allow_origin)
     header_set(res.headers, "Access-Control-Allow-Methods", config.allow_methods)
     header_set(res.headers, "Access-Control-Allow-Headers", config.allow_headers)

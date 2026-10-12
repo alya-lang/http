@@ -167,7 +167,7 @@ end
 
 ## Matches a request method and path against registered routes.
 ## Returns a RouteMatch struct.
-pub function router_match(r, method, path: string)
+pub function router_match(r, method, path: string) -> RouteMatch
     if r is null
         return RouteMatch { found: 0, action: "not_found", handler: null, route: "", params: {}, status: 404, allowed_methods: [] }
     end
@@ -190,7 +190,7 @@ pub function router_match(r, method, path: string)
     let i = 0
     let r_count = len(r.routes)
     while i < r_count
-        let rt = r.routes[i]
+        let rt: HttpRoute = r.routes[i]
         let res = route_match_segments(rt.segments, req_segs)
         if res["matched"] == true
             if rt.method == req_method or rt.method == "ANY" or rt.method == "*"

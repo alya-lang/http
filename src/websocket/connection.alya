@@ -47,7 +47,7 @@ function _ws_default_close(s)
 end
 
 ## Creates and initializes a new WebSocket connection wrapper
-pub function ws_connection_new(stream, is_server: int = 1, write_fn = null, close_fn = null, write_bytes_fn = null)
+pub function ws_connection_new(stream, is_server: int = 1, write_fn = null, close_fn = null, write_bytes_fn = null) -> WebSocketConnection
     if write_fn is null
         write_fn = _ws_default_write
     end

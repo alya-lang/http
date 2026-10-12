@@ -17,7 +17,7 @@ import "json" as json_pkg
 import "mustache" as mustache_pkg
 
 ## Creates a new HttpContext instance
-pub function ctx_new(req: HttpRequest, res: HttpResponse = null, client_sock: int = -1)
+pub function ctx_new(req: HttpRequest, res: HttpResponse = null, client_sock: int = -1) -> HttpContext
     return context_create(req, res, client_sock)
 end
 

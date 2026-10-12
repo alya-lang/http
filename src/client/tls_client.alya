@@ -35,7 +35,7 @@ end
 
 ## Performs one HTTPS request natively, following redirects when configured
 pub function https_execute(client: HttpClient, method, url_str: string, extra_headers = null, body: string = "")
-    let parsed = url_pkg::url_parse(url_str)
+    let parsed: Url = url_pkg::url_parse(url_str)
     let host = parsed.host
     if host == ""
         return HttpResponse { status_code: -1, status_text: f"Invalid URL host: {url_str}", headers: {}, body: "", body_bytes: [], cookies: [] }
@@ -155,7 +155,7 @@ pub function https_execute(client: HttpClient, method, url_str: string, extra_he
     end
     tls::close(full)
 
-    let resp = http_parse_response_bytes(raw)
+    let resp: HttpResponse = http_parse_response_bytes(raw)
     if follow == 1 and http_is_redirect(resp.status_code) and max_redirs > 0
         let loc = header_get(resp.headers, "location", "")
         if loc != ""

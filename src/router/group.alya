@@ -15,7 +15,7 @@ pub struct RouteGroup
 end
 
 ## Creates a new RouteGroup attached to a router
-pub function group_new(router, prefix: string)
+pub function group_new(router, prefix: string) -> RouteGroup
     return RouteGroup {
         router: router,
         prefix: prefix

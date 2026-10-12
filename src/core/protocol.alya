@@ -30,7 +30,7 @@ pub function _proto_find(s, target, start_idx: int = 0)
 end
 
 ## Parses a raw HTTP/1.1 request wire string into an HttpRequest struct
-pub function http_parse_request(raw, remote_addr: string = "")
+pub function http_parse_request(raw, remote_addr: string = "") -> HttpRequest
     if raw is null or len(raw) == 0
         return request_create("GET", "/", "", {}, "", remote_addr)
     end
@@ -122,7 +122,7 @@ pub function http_parse_request(raw, remote_addr: string = "")
 end
 
 ## Parses a raw HTTP/1.1 response wire string into an HttpResponse struct
-pub function http_parse_response(raw)
+pub function http_parse_response(raw) -> HttpResponse
     if raw is null or len(raw) == 0
         return HttpResponse { status_code: -1, status_text: "Empty response", headers: {}, body: "", body_bytes: [], cookies: [] }
     end
@@ -337,7 +337,7 @@ pub function http_parse_response_bytes(raw) -> HttpResponse
         body.push(raw[i])
         i += 1
     end
-    let parsed = http_parse_response(crypto::bytes_to_str(head))
+    let parsed: HttpResponse = http_parse_response(crypto::bytes_to_str(head))
     parsed.body = bytes_to_text_or_empty(body)
     parsed.body_bytes = body
     return parsed
@@ -425,7 +425,7 @@ end
 ##
 ## Headers decode as ASCII text; the body stays a byte array while `body`
 ## carries the text form for NUL-free payloads (empty otherwise).
-pub function http_parse_request_bytes(raw: array, remote_addr: string = "")
+pub function http_parse_request_bytes(raw: array, remote_addr: string = "") -> HttpRequest
     if raw is null or len(raw) == 0
         return request_create("GET", "/", "", {}, "", remote_addr)
     end
@@ -436,7 +436,7 @@ pub function http_parse_request_bytes(raw: array, remote_addr: string = "")
         head_len = sep
         body_start = sep + 4
     end
-    let parsed = http_parse_request(crypto::bytes_to_str(bytes_slice(raw, 0, head_len)) + "\r\n\r\n", remote_addr)
+    let parsed: HttpRequest = http_parse_request(crypto::bytes_to_str(bytes_slice(raw, 0, head_len)) + "\r\n\r\n", remote_addr)
     let body = bytes_slice(raw, body_start, len(raw) - body_start)
     parsed.body = bytes_to_text_or_empty(body)
     parsed.body_bytes = body

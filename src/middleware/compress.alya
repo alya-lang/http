@@ -30,8 +30,8 @@ pub function mw_apply_compression(ctx: HttpContext, config = null)
         return false
     end
 
-    let res = ctx.res
-    let req = ctx.req
+    let res: HttpResponse = ctx.res
+    let req: HttpRequest = ctx.req
 
     if res.body is null or len(res.body) == 0
         return false

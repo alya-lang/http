@@ -16,11 +16,11 @@ import "../server/reactive.alya"
 
 ## Represents the state of an in-flight reactive HTTP client request.
 pub struct ReactiveClientRequest
-    stream
-    req
+    stream: TcpStream
+    req: HttpRequest
     buffer: string
     headers_parsed: int
-    res
+    res: HttpResponse
     content_length: int
     on_response_cb
     on_error_cb
@@ -29,11 +29,11 @@ end
 
 ## Represents the state of a reactive WebSocket client connection.
 pub struct ReactiveWsClientState
-    stream
+    stream: TcpStream
     sec_key: string
     buffer: string
     handshake_complete: int
-    ws_conn
+    ws_conn: WebSocketConnection
     on_open_cb
     on_message_cb
     on_error_cb
@@ -42,11 +42,11 @@ end
 
 ## Represents an active Server-Sent Events (SSE) client connection.
 pub struct ReactiveSseClient
-    stream
-    req
+    stream: TcpStream
+    req: HttpRequest
     buffer: string
     headers_parsed: int
-    res
+    res: HttpResponse
     content_length: int
     on_event_cb
     on_error_cb
@@ -191,7 +191,7 @@ pub function client_reactive_fetch(loop, method, url_str: string, headers = null
         return null
     end
 
-    let parsed = url_pkg::url_parse(url_str)
+    let parsed: Url = url_pkg::url_parse(url_str)
     let host = parsed.host
     let scheme = parsed.scheme
     if host == "" or (scheme != "http" and scheme != "https")
@@ -258,7 +258,7 @@ pub function client_reactive_fetch(loop, method, url_str: string, headers = null
     let req: HttpRequest = request_create(method, full_path, query, req_headers, body)
     let wire = http_format_request(req)
 
-    let stream = ev::tcp_client_connect(loop, host, port, null, null)
+    let stream: TcpStream = ev::tcp_client_connect(loop, host, port, null, null)
     if stream is null
         if on_error is not null
             on_error("Failed to connect to " + host + ":" + str(port))
@@ -439,7 +439,7 @@ pub function client_reactive_ws_connect(loop, url_str: string, on_open = null, o
         return null
     end
 
-    let parsed = url_pkg::url_parse(url_str)
+    let parsed: Url = url_pkg::url_parse(url_str)
     let host = parsed.host
     let scheme = parsed.scheme
     if host == "" or (scheme != "ws" and scheme != "http")
@@ -479,7 +479,7 @@ pub function client_reactive_ws_connect(loop, url_str: string, on_open = null, o
     req_wire += "Sec-WebSocket-Version: 13\r\n"
     req_wire += "User-Agent: Alya-Http-Ws/0.1.0\r\n\r\n"
 
-    let stream = ev::tcp_client_connect(loop, host, port, null, null)
+    let stream: TcpStream = ev::tcp_client_connect(loop, host, port, null, null)
     if stream is null
         if on_error is not null
             on_error("Failed to connect to " + host + ":" + str(port))
@@ -510,7 +510,7 @@ end
 ## Dispatches all complete SSE events buffered in the client, keeping the
 ## remainder for the next chunk. Returns the number of dispatched events.
 function _sse_dispatch_buffered(sse_obj: ReactiveSseClient) -> int
-    let parsed = sse_stream_parse_events(sse_obj.buffer)
+    let parsed: map = sse_stream_parse_events(sse_obj.buffer)
     let ev_list = parsed["events"]
     sse_obj.buffer = parsed["remainder"]
     let ei = 0
@@ -604,7 +604,7 @@ pub function _on_reactive_sse_client_close(stream: TcpStream)
 end
 
 pub function client_reactive_sse(loop, url_str: string, headers = null, on_event = null, on_error = null, on_close = null)
-    let parsed = url_pkg::url_parse(url_str)
+    let parsed: Url = url_pkg::url_parse(url_str)
     let host = parsed.host
     let scheme = lower(parsed.scheme)
 
@@ -669,7 +669,7 @@ pub function client_reactive_sse(loop, url_str: string, headers = null, on_event
     let req: HttpRequest = request_create("GET", full_path, query, req_headers, "")
     let wire = http_format_request(req)
 
-    let stream = ev::tcp_client_connect(loop, host, port, null, null)
+    let stream: TcpStream = ev::tcp_client_connect(loop, host, port, null, null)
     if stream is null
         if on_error is not null
             on_error("Failed to connect to " + host + ":" + str(port))
@@ -706,11 +706,11 @@ end
 
 ## Represents the state of a reactive binary WebSocket client connection.
 pub struct ReactiveWsBytesState
-    stream
+    stream: TcpStream
     sec_key: string
     buffer_bytes: array
     handshake_complete: int
-    ws_conn
+    ws_conn: WebSocketConnection
     on_open_cb
     on_message_cb
     on_error_cb
@@ -848,7 +848,7 @@ pub function client_reactive_ws_connect_bytes(loop, url_str: string, on_open = n
         return null
     end
 
-    let parsed = url_pkg::url_parse(url_str)
+    let parsed: Url = url_pkg::url_parse(url_str)
     let host = parsed.host
     let scheme = parsed.scheme
     if host == "" or (scheme != "ws" and scheme != "http")
@@ -888,7 +888,7 @@ pub function client_reactive_ws_connect_bytes(loop, url_str: string, on_open = n
     req_wire += "Sec-WebSocket-Version: 13\r\n"
     req_wire += "User-Agent: Alya-Http-Ws/0.1.0\r\n\r\n"
 
-    let stream = ev::tcp_client_connect(loop, host, port, null, null)
+    let stream: TcpStream = ev::tcp_client_connect(loop, host, port, null, null)
     if stream is null
         if on_error is not null
             on_error("Failed to connect to " + host + ":" + str(port))

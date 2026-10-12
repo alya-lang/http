@@ -14,7 +14,7 @@ import "../core/protocol.alya"
 import "./tls_client.alya"
 
 ## Creates a new HttpClient instance
-pub function client_new(timeout_ms: int = 10000, follow_redirects: int = 1, max_redirects: int = 5, tls_verify: int = 1)
+pub function client_new(timeout_ms: int = 10000, follow_redirects: int = 1, max_redirects: int = 5, tls_verify: int = 1) -> HttpClient
     return HttpClient {
         timeout_ms: timeout_ms,
         headers: {},
@@ -46,7 +46,7 @@ end
 
 ## Performs an HTTP request using raw TCP socket or HTTPS bridge
 pub function client_execute(client: HttpClient, method, url_str: string, extra_headers = null, body: string = "")
-    let parsed = url_pkg::url_parse(url_str)
+    let parsed: Url = url_pkg::url_parse(url_str)
     let host = parsed.host
     let scheme = parsed.scheme
     if host == "" or (scheme != "http" and scheme != "https")
@@ -209,7 +209,7 @@ pub function client_execute_bytes(client: HttpClient, method, url_str: string, e
     if body_bytes is null
         body_bytes = []
     end
-    let parsed = url_pkg::url_parse(url_str)
+    let parsed: Url = url_pkg::url_parse(url_str)
     let host = parsed.host
     let scheme = parsed.scheme
     if host == "" or (scheme != "http" and scheme != "https")

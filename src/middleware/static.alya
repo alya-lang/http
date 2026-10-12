@@ -67,7 +67,7 @@ pub function mw_serve_static(ctx: HttpContext, url_prefix: string, local_dir: st
     let full_path = _safe_static_path(local_dir, rel_path)
     if full_path == ""
         # Traversal attempt: respond with 403
-        let res = ctx.res
+        let res: HttpResponse = ctx.res
         res.status_code = 403
         res.status_text = "Forbidden"
         res.body = "Forbidden"
@@ -78,7 +78,7 @@ pub function mw_serve_static(ctx: HttpContext, url_prefix: string, local_dir: st
 
     if file_exists(full_path) == true
         let ctype = mime_pkg::content_type(full_path, "application/octet-stream")
-        let res = ctx.res
+        let res: HttpResponse = ctx.res
         let accept_enc = ""
         if ctx.req is not null and ctx.req.headers is not null
             accept_enc = lower(header_get(ctx.req.headers, "accept-encoding", ""))

@@ -184,7 +184,7 @@ function main()
 
     runner_assert(r, len(server_ws_wire) > 0, "received WebSocket echo frame from server")
     let parsed_frame_res = http::ws_frame_parse(server_ws_wire, 0)
-    let echo_frame = parsed_frame_res[0]
+    let echo_frame: WebSocketFrame = parsed_frame_res[0]
     runner_assert_eq(r, echo_frame is not null, 1, "echo frame parsed")
     runner_assert_eq(r, http::ws_frame_is_text(echo_frame), 1, "echo frame is text")
     runner_assert_str_eq(r, echo_frame.payload, "WSECHO:" + client_ws_msg, "echo payload matches")
